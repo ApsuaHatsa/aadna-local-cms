@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧬 AADNA Local Admin</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Шапка приложения -->
+    <header class="app-header">
+      <div class="brand">
+        <h1>AADNA Local Admin</h1>
+        <span>v1.0.0</span>
+      </div>
+      
+      <!-- Панель Git статуса -->
+      <div class="git-status-bar" id="gitStatusBar">
+        <div class="git-dot" id="gitDot"></div>
+        <span id="gitStatusText">Загрузка статуса Git...</span>
+        <button class="btn btn-sm btn-primary" id="openPublishModalBtn" style="display: none;">🚀 Опубликовать</button>
+      </div>
+    </header>
+
+    <!-- Основная область -->
+    <main>
+      
+      <!-- ========================================== -->
+      <!-- 1. РЕЖИМ СПИСКА (list-view) -->
+      <!-- ========================================== -->
+      <div id="listView" class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h2 style="font-size: 1.3rem; font-weight: 600; color: #fff;">Результаты ДНК (Современный формат)</h2>
+          <button class="btn btn-primary" id="createNewBtn">＋ Создать результат</button>
+        </div>
+
+        <div style="margin-bottom: 1.25rem; display: flex; gap: 1rem;">
+          <input type="text" id="searchInput" placeholder="Поиск по фамилии, гаплогруппе, селению..." style="flex: 1;">
+        </div>
+
+        <div class="entries-table-wrapper">
+          <table class="entries-table">
+            <thead>
+              <tr>
+                <th>Фамилия</th>
+                <th>Гаплогруппа / Субклад</th>
+                <th>Дата</th>
+                <th>Статус</th>
+                <th style="text-align: right;">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="entriesTableBody">
+              <!-- Сюда вставляются строки постов JS-ом -->
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--color-muted);">Загрузка постов...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- 2. РЕЖИМ РЕДАКТИРОВАНИЯ (edit-view) -->
+      <!-- ========================================== -->
+      <div id="editView" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h2 style="font-size: 1.4rem; font-weight: 700; color: #fff;" id="formTitle">Редактирование результата</h2>
+          <button class="btn" id="backToListBtn">← Назад к списку</button>
+        </div>
+
+        <form id="resultForm" onsubmit="return false;">
+          <!-- Поля формы будут сгенерированы динамически на основе config.fields -->
+          <div id="dynamicFormFields"></div>
+
+          <!-- Кнопки управления внизу формы -->
+          <div class="button-row">
+            <button type="button" class="btn btn-danger" id="deleteEntryBtn" style="display: none;">🗑️ Удалить пост</button>
+            <span style="flex: 1;"></span>
+            <button type="button" class="btn" id="saveDraftBtn">💾 Сохранить как черновик</button>
+            <button type="button" class="btn btn-primary" id="saveAndPublishBtn">🚀 Сохранить и Опубликовать</button>
+          </div>
+        </form>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Модальное окно публикации Git -->
+  <div class="modal-overlay" id="publishModal">
+    <div class="modal-content">
+      <h3 class="modal-title">Публикация изменений на сайт</h3>
+      
+      <div id="gitStatusSummary" style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--color-muted);">
+        Обнаружено изменений: 0 файлов.
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.5rem;">
+        <label for="commitMessageInput">Описание изменений (коммит)<span class="required">*</span></label>
+        <input type="text" id="commitMessageInput" class="modal-input" placeholder="например: add ardzinba dna result">
+        <span class="field-desc">Краткое описание на английском (строго до 30 символов).</span>
+      </div>
+
+      <div class="modal-console" id="modalConsole" style="display: none;">
+        Ожидание запуска коммита...
+      </div>
+
+      <div class="button-row">
+        <button class="btn" id="closePublishModalBtn">Отмена</button>
+        <button class="btn btn-primary" id="startCommitBtn">🚀 Подтвердить и отправить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Контейнер для всплывающих уведомлений -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Подключение JS -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
