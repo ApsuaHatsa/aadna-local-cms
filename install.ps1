@@ -131,9 +131,42 @@ if ($ghCheck -eq $null) {
 }
 
 # -----------------------------------------------------------------------------
-# Этап 5: Авторизация на GitHub
+# Этап 5: Проверка и установка Zola
 # -----------------------------------------------------------------------------
-Write-Host "`n[5/12] Авторизация на GitHub..." -ForegroundColor Blue
+Write-Host "`n[5/13] Проверка Zola..." -ForegroundColor Blue
+$zolaCheck = Get-Command zola -ErrorAction SilentlyContinue
+if ($zolaCheck -eq $null) {
+    Write-Host "✗ Zola не найдена. Скачиваю Zola для Windows..." -ForegroundColor Red
+    $zolaUrl = "https://github.com/getzola/zola/releases/download/v0.19.2/zola-v0.19.2-x86_64-pc-windows-msvc.zip"
+    $zolaZip = Join-Path $tempDir "zola.zip"
+    $binDir = Join-Path $workspace "bin"
+    
+    if (!(Test-Path $binDir)) {
+        New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+    }
+    
+    Write-Host "Скачивание Zola (6 MB)..." -ForegroundColor Yellow
+    $webClient.DownloadFile($zolaUrl, $zolaZip)
+    
+    Write-Host "Распаковка Zola..." -ForegroundColor Yellow
+    Expand-Archive -Path $zolaZip -DestinationPath $binDir -Force
+    
+    # Добавляем binDir в пользовательский PATH, если его там еще нет
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath -notlike "*$binDir*") {
+        [System.Environment]::SetEnvironmentVariable("Path", $userPath + ";" + $binDir, "User")
+    }
+    
+    Write-Host "✓ Zola успешно установлена!" -ForegroundColor Green
+    Refresh-Path
+} else {
+    Write-Host "✓ Zola уже установлена." -ForegroundColor Green
+}
+
+# -----------------------------------------------------------------------------
+# Этап 6: Авторизация на GitHub
+# -----------------------------------------------------------------------------
+Write-Host "`n[6/13] Авторизация на GitHub..." -ForegroundColor Blue
 
 $authCheck = & gh auth status 2>&1
 if ($authCheck -like "*Logged in to github.com*") {
@@ -165,9 +198,9 @@ if ($repoCheck -like "*Could not resolve to a Repository*") {
 }
 
 # -----------------------------------------------------------------------------
-# Этап 6: Настройка Git Identity
+# Этап 7: Настройка Git Identity
 # -----------------------------------------------------------------------------
-Write-Host "`n[6/12] Настройка профиля Git..." -ForegroundColor Blue
+Write-Host "`n[7/13] Настройка профиля Git..." -ForegroundColor Blue
 $gitName = & git config --global user.name
 $gitEmail = & git config --global user.email
 
@@ -182,9 +215,9 @@ if ($gitEmail -eq $null -or $gitEmail -eq "") {
 Write-Host "✓ Имя Git: $gitName <$gitEmail>" -ForegroundColor Green
 
 # -----------------------------------------------------------------------------
-# Этапы 7-8: Клонирование репозиториев
+# Этапы 8-9: Клонирование репозиториев
 # -----------------------------------------------------------------------------
-Write-Host "`n[7-8/12] Скачивание репозиториев..." -ForegroundColor Blue
+Write-Host "`n[8-9/13] Скачивание репозиториев..." -ForegroundColor Blue
 
 $siteDir = Join-Path $workspace "aadna"
 $cmsDir = Join-Path $workspace "aadna-local-cms"
@@ -212,17 +245,17 @@ if (Test-Path $cmsDir) {
 }
 
 # -----------------------------------------------------------------------------
-# Этап 9: Установка зависимостей npm
+# Этап 10: Установка зависимостей npm
 # -----------------------------------------------------------------------------
-Write-Host "`n[9/12] Установка пакетов Node.js..." -ForegroundColor Blue
+Write-Host "`n[10/13] Установка пакетов Node.js..." -ForegroundColor Blue
 Set-Location $cmsDir
 Write-Host "Запуск npm install в $cmsDir..." -ForegroundColor Yellow
 npm install
 
 # -----------------------------------------------------------------------------
-# Этап 10-11: Создание ярлыков
+# Этап 11-12: Создание ярлыков
 # -----------------------------------------------------------------------------
-Write-Host "`n[10-11/12] Создание файлов быстрого запуска..." -ForegroundColor Blue
+Write-Host "`n[11-12/13] Создание файлов быстрого запуска..." -ForegroundColor Blue
 
 # Создаем ярлык на Рабочем столе
 $desktopPath = [System.IO.Path]::Combine([System.Environment]::GetFolderPath('Desktop'), "AADNA CMS.lnk")
@@ -242,9 +275,9 @@ try {
 }
 
 # -----------------------------------------------------------------------------
-# Этап 12: Финальный запуск и уборка
+# Этап 13: Финальный запуск и уборка
 # -----------------------------------------------------------------------------
-Write-Host "`n[12/12] Уборка временных файлов..." -ForegroundColor Blue
+Write-Host "`n[13/13] Уборка временных файлов..." -ForegroundColor Blue
 if (Test-Path $tempDir) {
     Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 }

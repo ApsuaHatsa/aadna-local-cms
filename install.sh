@@ -151,9 +151,45 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Этап 5: Авторизация на GitHub
+# Этап 5: Проверка и установка Zola
 # -----------------------------------------------------------------------------
-echo -e "\n${BLUE}[5/12] Авторизация на GitHub...${NC}"
+echo -e "\n${BLUE}[5/13] Проверка Zola...${NC}"
+if ! command -v zola &>/dev/null; then
+  echo -e "${RED}✗ Zola не найдена. Устанавливаю...${NC}"
+  if [ "$OS" = "macos" ]; then
+    if command -v brew &>/dev/null; then
+      brew install zola
+    else
+      echo "Скачивание Zola для macOS..."
+      ARCH=$(uname -m)
+      if [ "$ARCH" = "arm64" ]; then
+        ZOLA_OS_URL="https://github.com/getzola/zola/releases/download/v0.19.2/zola-v0.19.2-aarch64-apple-darwin.tar.gz"
+      else
+        ZOLA_OS_URL="https://github.com/getzola/zola/releases/download/v0.19.2/zola-v0.19.2-x86_64-apple-darwin.tar.gz"
+      fi
+      curl -L -o /tmp/zola.tar.gz "$ZOLA_OS_URL"
+      tar -xf /tmp/zola.tar.gz -C /tmp/
+      sudo cp /tmp/zola /usr/local/bin/
+    fi
+  elif [ "$OS" = "linux" ]; then
+    if command -v snap &>/dev/null; then
+      sudo snap install --classic zola
+    else
+      echo "Скачивание Zola для Linux..."
+      curl -L -o /tmp/zola.tar.gz https://github.com/getzola/zola/releases/download/v0.19.2/zola-v0.19.2-x86_64-unknown-linux-gnu.tar.gz
+      tar -xf /tmp/zola.tar.gz -C /tmp/
+      sudo cp /tmp/zola /usr/local/bin/
+    fi
+  fi
+  echo -e "${GREEN}✓ Zola успешно установлена!${NC}"
+else
+  echo -e "${GREEN}✓ Zola уже установлена.${NC}"
+fi
+
+# -----------------------------------------------------------------------------
+# Этап 6: Авторизация на GitHub
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}[6/13] Авторизация на GitHub...${NC}"
 if gh auth status &>/dev/null; then
   echo -e "${GREEN}✓ Вы уже авторизованы в GitHub.${NC}"
 else
@@ -179,9 +215,9 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Этап 6: Настройка Git Identity
+# Этап 7: Настройка Git Identity
 # -----------------------------------------------------------------------------
-echo -e "\n${BLUE}[6/12] Настройка профиля Git...${NC}"
+echo -e "\n${BLUE}[7/13] Настройка профиля Git...${NC}"
 GIT_NAME=$(git config --global user.name || echo "")
 GIT_EMAIL=$(git config --global user.email || echo "")
 
@@ -196,9 +232,9 @@ fi
 echo -e "${GREEN}✓ Git настроен: $GIT_NAME <$GIT_EMAIL>${NC}"
 
 # -----------------------------------------------------------------------------
-# Этапы 7-8: Клонирование репозиториев
+# Этапы 8-9: Клонирование репозиториев
 # -----------------------------------------------------------------------------
-echo -e "\n${BLUE}[7-8/12] Скачивание репозиториев...${NC}"
+echo -e "\n${BLUE}[8-9/13] Скачивание репозиториев...${NC}"
 
 SITE_DIR="$WORKSPACE/aadna"
 CMS_DIR="$WORKSPACE/aadna-local-cms"
@@ -222,17 +258,17 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Этап 9: Установка зависимостей npm
+# Этап 10: Установка зависимостей npm
 # -----------------------------------------------------------------------------
-echo -e "\n${BLUE}[9/12] Установка пакетов Node.js...${NC}"
+echo -e "\n${BLUE}[10/13] Установка пакетов Node.js...${NC}"
 cd "$CMS_DIR"
 echo -e "${YELLOW}Запуск npm install в $CMS_DIR...${NC}"
 npm install
 
 # -----------------------------------------------------------------------------
-# Этап 10-11: Создание ярлыков
+# Этап 11-12: Создание ярлыков
 # -----------------------------------------------------------------------------
-echo -e "\n${BLUE}[10-11/12] Создание файлов быстрого запуска...${NC}"
+echo -e "\n${BLUE}[11-12/13] Создание файлов быстрого запуска...${NC}"
 chmod +x run.sh
 
 # На macOS создаем ярлык на рабочем столе
