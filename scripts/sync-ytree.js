@@ -100,8 +100,9 @@ async function main() {
     const hasLight = await fs.pathExists(lightPath);
     const hasDark = await fs.pathExists(darkPath);
     
-    // Check if the HTML is already injected
-    const hasHtml = parsed.data.extra?.details_y?.ytree_tree?.includes(`ytree_${cladeClean}_light.png`);
+    // Check if the HTML is already injected and uses the latest styling
+    const hasHtml = parsed.data.extra?.details_y?.ytree_tree?.includes(`ytree_${cladeClean}_light.png`) &&
+                    parsed.data.extra?.details_y?.ytree_tree?.includes('ytree-img-light');
 
     if (hasLight && hasDark && hasHtml) {
       skipped++;
