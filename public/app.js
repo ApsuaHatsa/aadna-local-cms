@@ -739,7 +739,7 @@ function serializeForm() {
 // -----------------------------------------------------------------------------
 // Сохранение записи на диск
 // -----------------------------------------------------------------------------
-async function saveEntry(publishAfter = false) {
+async function saveEntry(actionType = 'draft') {
   const data = serializeForm();
   
   if (!data.title) {
@@ -769,13 +769,14 @@ async function saveEntry(publishAfter = false) {
     // Обновляем статус Git
     await updateGitStatus();
     
-    if (publishAfter) {
+    if (actionType === 'publish') {
       // Открываем модалку коммита
       openPublishModal();
-    } else {
+    } else if (actionType === 'draft') {
       // Возвращаемся к списку
       window.location.hash = '#/';
     }
+    // Если actionType === 'preview', просто остаемся на странице редактирования
     
     return result.slug;
   } catch (error) {
@@ -891,8 +892,22 @@ async function initApp() {
     window.location.hash = '#/';
   });
 
-  document.getElementById('saveDraftBtn').addEventListener('click', () => saveEntry(false));
-  document.getElementById('saveAndPublishBtn').addEventListener('click', () => saveEntry(true));
+  document.getElementById('saveDraftBtn').addEventListener('click', () => saveEntry('draft'));
+  document.getElementById('saveAndPublishBtn').addEventListener('click', () => saveEntry('publish'));
+  
+  document.getElementById('previewBtn').addEventListener('click', async () => {
+    const slug = await saveEntry('preview');
+    if (slug) {
+      const pathInput = document.querySelector('input[data-field-path="path"]');
+      const pagePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : slug;
+      // Открываем вкладку локального сервера Zola (порт 1111)
+      window.open(`http://localhost:1111/${pagePath}/`, '_blank');
+      
+      // Обновляем текущий слаг, чтобы мы оставались в режиме редактирования этого поста
+      ORIGINAL_SLUG = slug;
+      window.location.hash = `#/edit/${slug}`;
+    }
+  });
   
   document.getElementById('openPublishModalBtn').addEventListener('click', openPublishModal);
   document.getElementById('closePublishModalBtn').addEventListener('click', closePublishModal);
