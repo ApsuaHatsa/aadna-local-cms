@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import yaml from 'yaml';
 import matter from 'gray-matter';
 import { fileURLToPath } from 'url';
-import { execSync, exec } from 'child_process';
+import { execSync, exec, spawn } from 'child_process';
 
 // Импорт библиотек автоматизации
 import { normalizeAadnaContent } from './lib/normalize.js';
@@ -578,9 +578,11 @@ function startServer(port) {
     // Авто-открытие браузера
     try {
       const startCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-      exec(`${startCmd} http://localhost:${port}`, (err) => {
-        // Игнорируем ошибки авто-открытия
+      const child = spawn(startCmd, [`http://localhost:${port}`], {
+        detached: true,
+        stdio: 'ignore'
       });
+      child.unref();
     } catch (e) {
       // Игнорируем ошибки авто-открытия
     }
