@@ -74,6 +74,7 @@ async function main() {
   
   console.log(`Found ${mdFiles.length} result posts. Processing...`);
   
+  const apiCache = new Map();
   let processed = 0;
   let updated = 0;
   let skipped = 0;
@@ -111,10 +112,34 @@ async function main() {
 
     console.log(`[${processed + 1}/${mdFiles.length}] Processing ${slug} (clade: ${ySubclade})`);
     
-    // Throttle requests to avoid DDoS on the VPS
-    await delay(1500); // 1.5 second delay between processing each post
-    
-    const fetchRes = await fetchYtreeScreenshot(ySubclade, slug);
+    let fetchRes;
+    if (apiCache.has(ySubclade)) {
+      const cached = apiCache.get(ySubclade);
+      console.log(`  - [Cache Hit] Copying screenshots for ${ySubclade} from ${cached.slug}...`);
+      try {
+        const mediaDir = path.join(AADNA_PATH, 'static', 'media', 'results', slug);
+        await fs.ensureDir(mediaDir);
+        await fs.copy(cached.lightSourcePath, lightPath);
+        await fs.copy(cached.darkSourcePath, darkPath);
+        fetchRes = { success: true, link: cached.link };
+      } catch (err) {
+        console.error(`  - Failed to copy from cache, falling back to network:`, err.message);
+        await delay(1500);
+        fetchRes = await fetchYtreeScreenshot(ySubclade, slug);
+      }
+    } else {
+      // Throttle requests to avoid DDoS on the VPS
+      await delay(1500); // 1.5 second delay between processing each post
+      fetchRes = await fetchYtreeScreenshot(ySubclade, slug);
+      if (fetchRes.success) {
+        apiCache.set(ySubclade, {
+          slug,
+          link: fetchRes.link,
+          lightSourcePath: lightPath,
+          darkSourcePath: darkPath
+        });
+      }
+    }
     
     if (fetchRes.success || (hasLight && hasDark)) {
       if (!parsed.data.extra.details_y) {
