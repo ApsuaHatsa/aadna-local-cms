@@ -156,15 +156,9 @@ app.get('/api/collections/:collection/entries', async (req, res) => {
         slug: file.replace('.md', ''),
         title: parsed.data.title || file,
         date: parsed.data.date || '',
-        draft: parsed.data.draft ?? false
+        draft: parsed.data.draft ?? false,
+        ...parsed.data
       };
-
-      // Для результатов добавляем фамилию, гаплогруппу, субклад
-      if (collection === 'results') {
-        entry.surname = parsed.data.extra?.surname || '';
-        entry.haplogroup = parsed.data.extra?.y_haplogroup || '';
-        entry.subclade = parsed.data.extra?.y_subclade || '';
-      }
 
       entries.push(entry);
     }

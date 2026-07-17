@@ -431,6 +431,14 @@ function buildFormHTML(fields, parentPath = '') {
   return html;
 }
 
+function buildForm() {
+  const container = document.getElementById('dynamicFormFields');
+  if (ACTIVE_COLLECTION_CONFIG && ACTIVE_COLLECTION_CONFIG.fields) {
+    container.innerHTML = buildFormHTML(ACTIVE_COLLECTION_CONFIG.fields);
+    initializeFormEvents();
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Инициализация событий формы
 // -----------------------------------------------------------------------------
