@@ -130,7 +130,8 @@ if ! command -v gh &>/dev/null; then
       echo "Скачивание GitHub CLI..."
       curl -L -o /tmp/gh.tar.gz https://github.com/cli/cli/releases/download/v2.65.0/gh_2.65.0_macOS_amd64.tar.gz
       tar -xf /tmp/gh.tar.gz -C /tmp/
-      sudo cp /tmp/gh_*/bin/gh /usr/local/bin/
+      mkdir -p "$HOME/.local/bin"
+      cp /tmp/gh_*/bin/gh "$HOME/.local/bin/"
     fi
   elif [ "$OS" = "linux" ]; then
     if command -v apt-get &>/dev/null; then
@@ -154,7 +155,7 @@ fi
 # Этап 5: Проверка и установка Zola
 # -----------------------------------------------------------------------------
 echo -e "\n${BLUE}[5/13] Проверка Zola...${NC}"
-if ! command -v zola &>/dev/null; then
+if ! command -v zola &>/dev/null && [ ! -x "$HOME/.local/bin/zola" ]; then
   echo -e "${RED}✗ Zola не найдена. Устанавливаю...${NC}"
   if [ "$OS" = "macos" ]; then
     if command -v brew &>/dev/null; then
@@ -169,7 +170,8 @@ if ! command -v zola &>/dev/null; then
       fi
       curl -L -o /tmp/zola.tar.gz "$ZOLA_OS_URL"
       tar -xf /tmp/zola.tar.gz -C /tmp/
-      sudo cp /tmp/zola /usr/local/bin/
+      mkdir -p "$HOME/.local/bin"
+      cp /tmp/zola "$HOME/.local/bin/"
     fi
   elif [ "$OS" = "linux" ]; then
     if command -v snap &>/dev/null; then
@@ -178,7 +180,8 @@ if ! command -v zola &>/dev/null; then
       echo "Скачивание Zola для Linux..."
       curl -L -o /tmp/zola.tar.gz https://github.com/getzola/zola/releases/download/v0.19.2/zola-v0.19.2-x86_64-unknown-linux-gnu.tar.gz
       tar -xf /tmp/zola.tar.gz -C /tmp/
-      sudo cp /tmp/zola /usr/local/bin/
+      mkdir -p "$HOME/.local/bin"
+      cp /tmp/zola "$HOME/.local/bin/"
     fi
   fi
   echo -e "${GREEN}✓ Zola успешно установлена!${NC}"

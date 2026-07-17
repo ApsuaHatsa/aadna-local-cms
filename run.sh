@@ -68,7 +68,16 @@ cleanup() {
 trap cleanup EXIT
 
 # Проверяем наличие Zola
-if command -v zola &>/dev/null; then
+ZOLA_CMD="zola"
+if ! command -v zola &>/dev/null; then
+  if [ -x "$HOME/.local/bin/zola" ]; then
+    ZOLA_CMD="$HOME/.local/bin/zola"
+  elif [ -x "/usr/local/bin/zola" ]; then
+    ZOLA_CMD="/usr/local/bin/zola"
+  fi
+fi
+
+if command -v "$ZOLA_CMD" &>/dev/null || [ -x "$ZOLA_CMD" ]; then
   # Проверяем, свободен ли порт 1111
   if lsof -i :1111 >/dev/null 2>&1 || nc -z localhost 1111 >/dev/null 2>&1; then
     echo "[✓] Сервер предпросмотра Zola уже запущен на порту 1111."
@@ -76,7 +85,7 @@ if command -v zola &>/dev/null; then
     echo "[→] Запускаю локальный сервер предпросмотра Zola на порту 1111..."
     if [ -d "../aadna" ]; then
       cd ../aadna
-      zola serve -p 1111 >/dev/null 2>&1 &
+      "$ZOLA_CMD" serve -p 1111 >/dev/null 2>&1 &
       ZOLA_PID=$!
       cd "$CMS_DIR_PATH"
     fi
