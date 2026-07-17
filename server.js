@@ -243,9 +243,10 @@ async function fetchYtreeScreenshot(clade, slug) {
   let treeUrl = '';
 
   for (const theme of themes) {
-    const filename = `ytree_\$\{clade.replace(/[^a-zA-Z0-9-]/g, '')\}_\$\{theme\}.png`;
+    const cleanClade = clade.replace(/[^a-zA-Z0-9-]/g, '');
+    const filename = 'ytree_' + cleanClade + '_' + theme + '.png';
     const targetPath = path.join(mediaDir, filename);
-    const url = `https://ytree-api.apsny.dev/api/screenshot?clade=\$\{clade\}\$\{theme === 'dark' ? '&theme=dark' : ''\}`;
+    const url = 'https://ytree-api.apsny.dev/api/screenshot?clade=' + clade + (theme === 'dark' ? '&theme=dark' : '');
 
     try {
       if (await fs.pathExists(targetPath)) {
@@ -257,14 +258,14 @@ async function fetchYtreeScreenshot(clade, slug) {
         continue;
       }
 
-      console.log(`Fetching YTree screenshot for \$\{clade\} (\$\{theme\} theme)...`);
+      console.log('Fetching YTree screenshot for ' + clade + ' (' + theme + ' theme)...');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
-      if (!response.ok) throw new Error(`HTTP \$\{response.status\}`);
-      
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const json = await response.json();
@@ -275,10 +276,10 @@ async function fetchYtreeScreenshot(clade, slug) {
 
       const arrayBuffer = await response.arrayBuffer();
       await fs.writeFile(targetPath, Buffer.from(arrayBuffer));
-      console.log(`Successfully saved \$\{filename\}`);
+      console.log('Successfully saved ' + filename);
       successCount++;
     } catch (err) {
-      console.error(`Failed to fetch YTree screenshot (\$\{theme\}):`, err.message);
+      console.error('Failed to fetch YTree screenshot (' + theme + '):', err.message);
     }
   }
   return { success: successCount === 2, link: treeUrl };

@@ -1225,7 +1225,11 @@ async function initApp() {
       const pathInput = document.querySelector('input[data-field-path="path"]');
       const basePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : cleanSlug;
       
-      window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
+      // Задержка 2 сек, чтобы Zola успел пересобрать страницу
+      showToast('Генерация предпросмотра... Страница откроется автоматически', 'info');
+      setTimeout(() => {
+        window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
+      }, 2000);
     }
   });
 
