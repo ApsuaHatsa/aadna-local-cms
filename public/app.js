@@ -794,18 +794,52 @@ async function openPublishModal() {
   const summary = document.getElementById('gitStatusSummary');
   const commitInput = document.getElementById('commitMessageInput');
   const consoleLog = document.getElementById('modalConsole');
+  const filesList = document.getElementById('gitFilesList');
   
   commitInput.value = '';
   consoleLog.style.display = 'none';
   consoleLog.innerText = '';
+  filesList.innerHTML = '';
+  filesList.style.display = 'none';
   
   try {
     const res = await fetch('/api/git-status');
     const status = await res.json();
     
     if (status.success) {
-      summary.innerText = `Изменено файлов: ${status.totalChanges} (${status.modified} изм., ${status.added} доб., ${status.deleted} уд.)`;
+      summary.innerText = `Изменено файлов: ${status.totalChanges} (${status.modified} изм., ${status.added + status.untracked} доб., ${status.deleted} уд.)`;
       commitInput.placeholder = `например: add ${ORIGINAL_SLUG || 'new'} post`;
+      
+      if (status.files && status.files.length > 0) {
+        filesList.style.display = 'block';
+        status.files.forEach(f => {
+          let color = 'var(--color-muted)';
+          let statusChar = f.status;
+          
+          if (f.status === 'M') {
+            color = '#6366F1'; // Синий/индиго для измененных
+            statusChar = 'Изм.';
+          } else if (f.status === 'A' || f.status === '??') {
+            color = 'var(--color-accent)'; // Бирюзовый для новых
+            statusChar = 'Нов.';
+          } else if (f.status === 'D') {
+            color = 'var(--color-danger)'; // Красный для удаленных
+            statusChar = 'Удл.';
+          }
+          
+          const item = document.createElement('div');
+          item.style.color = color;
+          item.style.marginBottom = '0.25rem';
+          item.style.display = 'flex';
+          item.style.justifyContent = 'space-between';
+          
+          item.innerHTML = `
+            <span>${f.file}</span>
+            <span style="font-weight: bold; font-size: 0.75rem;">[${statusChar}]</span>
+          `;
+          filesList.appendChild(item);
+        });
+      }
     }
   } catch (e) {
     summary.innerText = 'Не удалось загрузить детальный статус Git';
@@ -909,7 +943,7 @@ async function initApp() {
     }
   });
   
-  document.getElementById('openPublishModalBtn').addEventListener('click', openPublishModal);
+  document.getElementById('gitStatusBar').addEventListener('click', openPublishModal);
   document.getElementById('closePublishModalBtn').addEventListener('click', closePublishModal);
   document.getElementById('startCommitBtn').addEventListener('click', startGitPublish);
 
