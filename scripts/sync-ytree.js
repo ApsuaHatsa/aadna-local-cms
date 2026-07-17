@@ -125,8 +125,22 @@ async function main() {
         `<img src="/media/results/${slug}/ytree_${cladeClean}_light.png" class="no-zoom ytree-img-light block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${cladeClean}">\n` +
         `<img src="/media/results/${slug}/ytree_${cladeClean}_dark.png" class="no-zoom ytree-img-dark hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${cladeClean}">`;
         
-      if (fetchRes.link) {
-        parsed.data.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
+      let finalLink = fetchRes.link;
+      if (finalLink) {
+        try {
+          const u = new URL(finalLink);
+          u.search = '';
+          u.searchParams.set('utm_source', 'aadna.ru');
+          u.searchParams.set('utm_medium', '/' + slug);
+          u.searchParams.set('utm_campaign', 'aadna_referrals');
+          finalLink = u.toString();
+        } catch (e) {
+          // Fallback
+        }
+      }
+
+      if (finalLink) {
+        parsed.data.extra.details_y.ytree_tree = `<a href="${finalLink}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
       } else {
         parsed.data.extra.details_y.ytree_tree = imgHtml;
       }
