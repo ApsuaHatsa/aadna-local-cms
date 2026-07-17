@@ -234,6 +234,56 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
+async function fetchYtreeScreenshot(clade, slug) {
+  const themes = ['light', 'dark'];
+  const mediaDir = path.join(AADNA_PATH, 'static', 'media', 'results', slug);
+  await fs.ensureDir(mediaDir);
+
+  let successCount = 0;
+  let treeUrl = '';
+
+  for (const theme of themes) {
+    const filename = `ytree_\$\{clade.replace(/[^a-zA-Z0-9-]/g, '')\}_\$\{theme\}.png`;
+    const targetPath = path.join(mediaDir, filename);
+    const url = `https://ytree-api.apsny.dev/api/screenshot?clade=\$\{clade\}\$\{theme === 'dark' ? '&theme=dark' : ''\}`;
+
+    try {
+      if (await fs.pathExists(targetPath)) {
+        successCount++;
+        if (!treeUrl) {
+          const headRes = await fetch(url, { method: 'HEAD' });
+          if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
+        }
+        continue;
+      }
+
+      console.log(`Fetching YTree screenshot for \$\{clade\} (\$\{theme\} theme)...`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!response.ok) throw new Error(`HTTP \$\{response.status\}`);
+      
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const json = await response.json();
+        throw new Error(json.error || 'Branch not found on the tree');
+      }
+
+      if (!treeUrl) treeUrl = response.headers.get('x-tree-url') || '';
+
+      const arrayBuffer = await response.arrayBuffer();
+      await fs.writeFile(targetPath, Buffer.from(arrayBuffer));
+      console.log(`Successfully saved \$\{filename\}`);
+      successCount++;
+    } catch (err) {
+      console.error(`Failed to fetch YTree screenshot (\$\{theme\}):`, err.message);
+    }
+  }
+  return { success: successCount === 2, link: treeUrl };
+}
+
 // 5. POST /api/collections/:collection/entry - Сохранить/создать запись
 app.post('/api/collections/:collection/entry', async (req, res) => {
   const { collection } = req.params;
@@ -266,6 +316,28 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
 
     // Определение слага
     const nextSlug = getEntrySlug(normalized, colSettings);
+
+    // Автоматическая генерация скриншотов YTree
+    if (collection === 'results' && normalized.extra?.y_subclade) {
+      const clade = normalized.extra.y_subclade.replace(/[^a-zA-Z0-9-]/g, '');
+      if (clade) {
+        // Мы делаем это для предпросмотра (isPreview) и для обычного сохранения,
+        // но для предпросмотра слаг должен быть nextSlug
+        const targetSlug = isPreview ? `\${nextSlug}-preview` : nextSlug;
+        
+        // Фоновая загрузка
+        await fetchYtreeScreenshot(normalized.extra.y_subclade, targetSlug);
+        
+        if (!normalized.extra.details_y) {
+          normalized.extra.details_y = {};
+        }
+        
+        // Вставляем HTML-код с двумя темами
+        normalized.extra.details_y.ytree_tree = 
+          `<img src="/media/results/\${targetSlug}/ytree_\${clade}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg" alt="YTree \${clade}">\n` +
+          `<img src="/media/results/\${targetSlug}/ytree_\${clade}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg" alt="YTree \${clade}">`;
+      }
+    }
 
     if (isPreview) {
       // Режим предпросмотра: сохраняем во временный файл

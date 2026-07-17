@@ -2,7 +2,6 @@
    🧬 AADNA Local - Client Side Application Logic
    ============================================================================= */
 
-import { insertMarkdown, setupEditorAttachments } from './editor.js';
 
 let CONFIG = null;
 let CURRENT_ENTRY = null;
@@ -361,17 +360,13 @@ function buildFormHTML(fields, parentPath = '') {
     } 
     else if (field.type === 'rich-text') {
       inputControl = `
-        <div class="editor-container">
-          <div class="editor-toolbar">
-            <button type="button" class="editor-btn text-bold" data-action="bold" title="Жирный"><b>B</b></button>
-            <button type="button" class="editor-btn text-italic" data-action="italic" title="Курсив"><i>I</i></button>
-            <button type="button" class="editor-btn text-link" data-action="link" title="Вставить ссылку">🔗</button>
-            <button type="button" class="editor-btn text-image" data-action="image" title="Вставить картинку">🖼️</button>
-            <button type="button" class="editor-btn text-code" data-action="code" title="Вставить код">&lt;/&gt;</button>
-          </div>
-          <textarea data-field-path="${fieldPath}" placeholder="Введите текст... (вы можете вставить изображение Ctrl+V или перетащить файл)"></textarea>
+        <div class="editor-container" style="padding: 0; border: none; background: transparent;">
+          <div data-editor="toastui" data-field-path="${fieldPath}"></div>
         </div>
       `;
+    }
+    else if (field.type === 'text') {
+      inputControl = `<textarea data-field-path="${fieldPath}" rows="5" style="width: 100%; min-height: 120px;" placeholder="Введите текст..."></textarea>`;
     } 
     else if (field.type === 'image') {
       inputControl = `
@@ -443,20 +438,6 @@ function buildForm() {
 // Инициализация событий формы
 // -----------------------------------------------------------------------------
 function initializeFormEvents() {
-  // Навешиваем обработчики для Markdown редакторов
-  document.querySelectorAll('.editor-container').forEach(container => {
-    const textarea = container.querySelector('textarea');
-    
-    container.querySelectorAll('.editor-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const action = btn.getAttribute('data-action');
-        insertMarkdown(textarea, action);
-      });
-    });
-
-    setupEditorAttachments(textarea, showToast, () => ACTIVE_COLLECTION);
-  });
-
   // Навешиваем обработчики для загрузчиков картинок
   document.querySelectorAll('.uploader-area').forEach(area => {
     const fileInput = area.querySelector('input[type="file"]');
@@ -749,6 +730,54 @@ function populateForm(data) {
     }
   });
 
+  // Очистка старых инстансов редактора
+  if (window.activeEditors) {
+    Object.values(window.activeEditors).forEach(ed => {
+      try { ed.destroy(); } catch(e){}
+    });
+  }
+  window.activeEditors = {};
+
+  // Инициализация Toast UI Editor
+  document.querySelectorAll('[data-editor="toastui"]').forEach(container => {
+    const path = container.getAttribute('data-field-path');
+    const val = getValueByPath(data, path) || '';
+    
+    const editor = new toastui.Editor({
+      el: container,
+      initialEditType: 'wysiwyg',
+      previewStyle: 'vertical',
+      height: '500px',
+      initialValue: val,
+      theme: 'dark',
+      language: 'ru-RU',
+      hooks: {
+        addImageBlobHook: async (blob, callback) => {
+          showToast('Загрузка изображения...', 'info');
+          try {
+            const formData = new FormData();
+            formData.append('image', blob);
+            const pathInput = document.querySelector('input[data-field-path="path"]');
+            const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+            const uploadUrl = slug ? `/api/upload?slug=${encodeURIComponent(slug)}&collection=${ACTIVE_COLLECTION}` : `/api/upload?collection=${ACTIVE_COLLECTION}`;
+            
+            const response = await fetch(uploadUrl, { method: 'POST', body: formData });
+            if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
+            
+            const result = await response.json();
+            callback(result.url, blob.name || 'image');
+            showToast('Изображение вставлено!', 'success');
+          } catch (error) {
+            console.error(error);
+            showToast('Ошибка загрузки изображения', 'error');
+            callback('', 'Ошибка загрузки');
+          }
+        }
+      }
+    });
+    window.activeEditors[path] = editor;
+  });
+
   // Заполняем списки строк
   document.querySelectorAll('.string-list-container').forEach(container => {
     const path = container.getAttribute('data-field-path');
@@ -817,7 +846,10 @@ function serializeForm() {
     if (control.classList.contains('string-list-container')) return;
 
     let val = undefined;
-    if (control.tagName === 'SELECT') {
+    if (control.getAttribute('data-editor') === 'toastui') {
+      val = window.activeEditors && window.activeEditors[path] ? window.activeEditors[path].getMarkdown() : '';
+    }
+    else if (control.tagName === 'SELECT') {
       if (control.multiple) {
         val = Array.from(control.selectedOptions).map(opt => opt.value);
       } else {
@@ -901,7 +933,7 @@ async function saveEntry(actionType = 'draft') {
   }
 
   const isPreview = actionType === 'preview';
-  showToast(isPreview ? 'Генерация временного предпросмотра...' : 'Сохранение файла на диск...', 'info');
+  showToast(isPreview ? 'Генерация временного предпросмотра...' : 'Сохранение файла на диск (Генерация древа YTree может занять до 15 сек)...', 'info');
 
   try {
     const response = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entry`, {

@@ -260,8 +260,8 @@ header.app-header {
    Form Fields
    ============================================================================= */
 .form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
 }
 
