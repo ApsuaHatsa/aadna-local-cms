@@ -318,34 +318,42 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
     const nextSlug = getEntrySlug(normalized, colSettings);
 
     // Автоматическая генерация скриншотов YTree
-    if (collection === 'results' && normalized.extra?.y_subclade) {
-      const clade = normalized.extra.y_subclade.replace(/[^a-zA-Z0-9-]/g, '');
-      if (clade) {
-        // Мы делаем это для предпросмотра (isPreview) и для обычного сохранения,
-        // но для предпросмотра слаг должен быть nextSlug
-        const targetSlug = isPreview ? `${nextSlug}-preview` : nextSlug;
-        
-        // Фоновая загрузка
-        const fetchRes = await fetchYtreeScreenshot(normalized.extra.y_subclade, targetSlug);
+    if (collection === 'results') {
+      const customClade = normalized.extra?.details_y?.ytree_clade;
+      const defaultClade = normalized.extra?.y_subclade;
+      const targetClade = (customClade && customClade.trim()) ? customClade.trim() : defaultClade;
 
-        if (fetchRes.success) {
-          if (!normalized.extra.details_y) {
-            normalized.extra.details_y = {};
+      if (targetClade) {
+        const clade = targetClade.replace(/[^a-zA-Z0-9-]/g, '');
+        if (clade) {
+          // Мы делаем это для предпросмотра (isPreview) и для обычного сохранения,
+          // но для предпросмотра слаг должен быть nextSlug
+          const targetSlug = isPreview ? `${nextSlug}-preview` : nextSlug;
+
+          // Фоновая загрузка
+          const fetchRes = await fetchYtreeScreenshot(targetClade, targetSlug);
+
+          if (fetchRes.success) {
+            if (!normalized.extra.details_y) {
+              normalized.extra.details_y = {};
+            }
+
+            // Вставляем HTML-код с двумя темами
+            const imgHtml =
+              `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">\n` +
+              `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">`;
+
+            if (fetchRes.link) {
+              normalized.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
+            } else {
+              normalized.extra.details_y.ytree_tree = imgHtml;
+            }
+          } else if (normalized.extra.details_y && normalized.extra.details_y.ytree_tree) {
+            delete normalized.extra.details_y.ytree_tree;
           }
-
-          // Вставляем HTML-код с двумя темами
-          const imgHtml =
-            `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">\n` +
-            `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">`;
-
-          if (fetchRes.link) {
-            normalized.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
-          } else {
-            normalized.extra.details_y.ytree_tree = imgHtml;
-          }
-        } else if (normalized.extra.details_y && normalized.extra.details_y.ytree_tree) {
-          delete normalized.extra.details_y.ytree_tree;
         }
+      } else if (normalized.extra?.details_y && normalized.extra.details_y.ytree_tree) {
+        delete normalized.extra.details_y.ytree_tree;
       }
     }
 

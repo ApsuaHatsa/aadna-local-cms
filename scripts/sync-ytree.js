@@ -84,7 +84,10 @@ async function main() {
     const raw = await fs.readFile(filePath, 'utf-8');
     const parsed = matter(raw);
     
-    const ySubclade = parsed.data.extra?.y_subclade;
+    const customClade = parsed.data.extra?.details_y?.ytree_clade;
+    const defaultClade = parsed.data.extra?.y_subclade;
+    const ySubclade = (customClade && customClade.trim()) ? customClade.trim() : defaultClade;
+    
     if (!ySubclade) {
       skipped++;
       continue;
