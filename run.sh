@@ -54,6 +54,37 @@ else
 fi
 
 echo ""
-echo "[3/3] Запуск сервера..."
+echo "[3/3] Подготовка серверов..."
+
+ZOLA_PID=""
+
+# Функция очистки фоновых процессов при выходе
+cleanup() {
+  if [ -n "$ZOLA_PID" ]; then
+    echo -e "\n[→] Останавливаю сервер предпросмотра Zola (PID: $ZOLA_PID)..."
+    kill "$ZOLA_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+# Проверяем наличие Zola
+if command -v zola &>/dev/null; then
+  # Проверяем, свободен ли порт 1111
+  if lsof -i :1111 >/dev/null 2>&1 || nc -z localhost 1111 >/dev/null 2>&1; then
+    echo "[✓] Сервер предпросмотра Zola уже запущен на порту 1111."
+  else
+    echo "[→] Запускаю локальный сервер предпросмотра Zola на порту 1111..."
+    if [ -d "../aadna" ]; then
+      cd ../aadna
+      zola serve -p 1111 >/dev/null 2>&1 &
+      ZOLA_PID=$!
+      cd "$CMS_DIR_PATH"
+    fi
+  fi
+else
+  echo "[!] Zola не найдена в системе. Локальный предпросмотр на порту 1111 будет недоступен."
+fi
+
+echo "[→] Запускаю сервер админки на порту 4400..."
 xdg-open http://localhost:4400 2>/dev/null || open http://localhost:4400 2>/dev/null &
 node server.js

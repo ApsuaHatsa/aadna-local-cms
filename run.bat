@@ -54,7 +54,31 @@ if exist "..\aadna" (
 )
 
 echo.
-echo [3/3] Запуск сервера...
+echo [3/3] Подготовка серверов...
+
+rem Проверяем, установлена ли Zola
+where zola >nul 2>&1
+if %errorlevel% equ 0 (
+  rem Проверяем, занят ли порт 1111
+  netstat -ano | findstr :1111 >nul 2>&1
+  if %errorlevel% equ 0 (
+    echo [✓] Сервер предпросмотра Zola уже работает на порту 1111.
+  ) else (
+    echo [→] Запускаю локальный сервер предпросмотра Zola на порту 1111...
+    if exist "..\aadna" (
+      cd ..\aadna
+      start /b zola serve -p 1111 >nul 2>&1
+      cd /d "%CMS_DIR%"
+    )
+  )
+) else (
+  echo [!] Zola не найдена в системе. Локальный предпросмотр на порту 1111 будет недоступен.
+)
+
+echo [→] Запускаю сервер админки на порту 4400...
 start http://localhost:4400
 node server.js
+
+rem При выходе тушим фоновую Zola, если она была запущена на порту 1111
+taskkill /f /im zola.exe >nul 2>&1
 pause
