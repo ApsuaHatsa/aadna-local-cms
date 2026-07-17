@@ -469,10 +469,15 @@ async function handleImageUpload(file, hiddenInput, previewDiv) {
   showToast(`Загрузка изображения ${file.name}...`, 'info');
   
   try {
+    const pathInput = document.querySelector('input[data-field-path="path"]');
+    const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+    const collection = 'results';
+
     const formData = new FormData();
     formData.append('image', file, file.name);
 
-    const response = await fetch('/api/upload', {
+    const uploadUrl = slug ? `/api/upload?slug=${encodeURIComponent(slug)}&collection=${collection}` : `/api/upload?collection=${collection}`;
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       body: formData
     });

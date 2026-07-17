@@ -61,10 +61,15 @@ export function setupEditorAttachments(textarea, showToast) {
         showToast('Загрузка изображения из буфера обмена...', 'info');
 
         try {
+          const pathInput = document.querySelector('input[data-field-path="path"]');
+          const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+          const collection = 'results';
+
           const formData = new FormData();
           formData.append('image', file, 'pasted_image.png');
 
-          const response = await fetch('/api/upload', {
+          const uploadUrl = slug ? `/api/upload?slug=${encodeURIComponent(slug)}&collection=${collection}` : `/api/upload?collection=${collection}`;
+          const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData
           });
@@ -111,10 +116,15 @@ export function setupEditorAttachments(textarea, showToast) {
         showToast('Загрузка перетащенного изображения...', 'info');
 
         try {
+          const pathInput = document.querySelector('input[data-field-path="path"]');
+          const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+          const collection = 'results';
+
           const formData = new FormData();
           formData.append('image', file, file.name);
 
-          const response = await fetch('/api/upload', {
+          const uploadUrl = slug ? `/api/upload?slug=${encodeURIComponent(slug)}&collection=${collection}` : `/api/upload?collection=${collection}`;
+          const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData
           });

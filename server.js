@@ -138,20 +138,35 @@ app.get('/api/entry/:slug', async (req, res) => {
   }
 });
 
-// 4. POST /api/upload - Загрузка файла в корень media
+// 4. POST /api/upload - Загрузка файла в корень media или папку поста
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    const { slug, collection } = req.query;
+    const colName = collection || 'results';
+
+    if (slug) {
+      // Сохраняем напрямую в папку поста через saveUploadedImage
+      const url = await saveUploadedImage(slug, req.file.originalname, req.file.buffer, colName);
+      return res.json({ url });
+    }
+
+    // Сохраняем в корень с уникальным именем (таймстамп), чтобы избежать коллизий
     const safeName = slugifyFilename(req.file.originalname);
-    const targetPath = path.join(MEDIA_DIR, safeName);
+    const ext = path.extname(safeName);
+    const base = path.basename(safeName, ext);
+    const uniqueName = `${base}-${Date.now()}${ext}`;
+
+    const targetDir = path.join(AADNA_PATH, `static/media/${colName}`);
+    const targetPath = path.join(targetDir, uniqueName);
     
-    await fs.ensureDir(MEDIA_DIR);
+    await fs.ensureDir(targetDir);
     await fs.writeFile(targetPath, req.file.buffer);
 
-    res.json({ url: `/media/results/${safeName}` });
+    res.json({ url: `/media/${colName}/${uniqueName}` });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -198,7 +213,7 @@ app.post('/api/entry', async (req, res) => {
       }
 
       // Релокация медиафайлов (для превью используем оригинальный слаг, чтобы не дублировать папки)
-      const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized);
+      const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
       
       // Генерируем временную OG-картинку
       await generatePreview(previewSlug, finalContentObj);
@@ -212,7 +227,7 @@ app.post('/api/entry', async (req, res) => {
 
     // Обычное сохранение/публикация
     const targetPath = path.join(RESULTS_DIR, `${nextSlug}.md`);
-    const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized);
+    const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
 
     if (snpToSync) {
       await syncSnpPath(snpToSync);
