@@ -210,6 +210,48 @@ app.post('/api/entry', async (req, res) => {
   }
 });
 
+// 5.5 POST /api/entry/:slug/revert - Откат изменений поста
+app.post('/api/entry/:slug/revert', async (req, res) => {
+  const { slug } = req.params;
+  const filePath = path.join(RESULTS_DIR, `${slug}.md`);
+
+  try {
+    // Проверяем, отслеживается ли файл в Git
+    const checkRes = runGitCommand(`git ls-files --error-unmatch content/results/${slug}.md`);
+    if (checkRes.success) {
+      // Файл отслеживается, откатываем изменения к HEAD
+      runGitCommand(`git checkout -- content/results/${slug}.md`);
+      runGitCommand(`git checkout -- static/og/results/manifest.json`);
+      
+      // Картинку OG можно удалить/пересоздать при необходимости, но git restore возвращает файл.
+      // Если файл картинки был создан, но не отслеживается, мы можем удалить его, чтобы не захламлять репозиторий.
+      const ogPath = path.join(AADNA_PATH, `static/og/results/${slug}.png`);
+      if (await fs.pathExists(ogPath)) {
+        const ogCheck = runGitCommand(`git ls-files --error-unmatch static/og/results/${slug}.png`);
+        if (!ogCheck.success) {
+          await fs.remove(ogPath);
+        }
+      }
+    } else {
+      // Файл новый (не отслеживается), просто полностью удаляем его
+      await fs.remove(filePath);
+      
+      // Удаляем также сгенерированную OG-картинку
+      const ogPath = path.join(AADNA_PATH, `static/og/results/${slug}.png`);
+      await fs.remove(ogPath);
+      
+      // Удаляем медиа-папку этого рода, если она создалась
+      const mediaFolder = path.join(MEDIA_DIR, slug);
+      await fs.remove(mediaFolder);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 6. GET /api/git-status - Проверка изменений
 app.get('/api/git-status', (req, res) => {
   const status = getStatus();

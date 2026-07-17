@@ -990,6 +990,22 @@ async function initApp() {
       window.location.hash = `#/edit/${slug}`;
     }
   });
+
+  document.getElementById('revertEntryBtn').addEventListener('click', async () => {
+    if (!ORIGINAL_SLUG) return;
+    
+    if (confirm('Вы действительно хотите отменить все локальные изменения этого поста и вернуть его к исходному состоянию из Git?')) {
+      showToast('Откат изменений...', 'info');
+      try {
+        const res = await fetch(`/api/entry/${ORIGINAL_SLUG}/revert`, { method: 'POST' });
+        if (!res.ok) throw new Error('Не удалось откатить изменения');
+        showToast('Изменения успешно отменены!', 'success');
+        window.location.hash = '#/';
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+  });
   
   document.getElementById('gitStatusBar').addEventListener('click', openPublishModal);
   document.getElementById('closePublishModalBtn').addEventListener('click', closePublishModal);
@@ -1018,6 +1034,7 @@ async function initApp() {
       // Режим списка
       document.getElementById('editView').style.display = 'none';
       document.getElementById('listView').style.display = 'block';
+      document.getElementById('revertEntryBtn').style.display = 'none';
       loadEntries();
     } 
     else if (hash === '#/new') {
@@ -1025,6 +1042,7 @@ async function initApp() {
       ORIGINAL_SLUG = '';
       document.getElementById('listView').style.display = 'none';
       document.getElementById('editView').style.display = 'block';
+      document.getElementById('revertEntryBtn').style.display = 'none';
       document.getElementById('formTitle').innerText = 'Создание нового ДНК-результата';
       
       // Заполняем пустые дефолтные значения (дата, шаблон и т.д.)
@@ -1049,6 +1067,7 @@ async function initApp() {
       
       document.getElementById('listView').style.display = 'none';
       document.getElementById('editView').style.display = 'block';
+      document.getElementById('revertEntryBtn').style.display = 'inline-flex';
       document.getElementById('formTitle').innerText = `Редактирование: ${slug}`;
       
       showToast('Загрузка данных поста...', 'info');
