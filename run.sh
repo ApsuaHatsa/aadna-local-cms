@@ -85,7 +85,7 @@ if command -v "$ZOLA_CMD" &>/dev/null || [ -x "$ZOLA_CMD" ]; then
     echo "[→] Запускаю локальный сервер предпросмотра Zola на порту 1111..."
     if [ -d "../aadna" ]; then
       cd ../aadna
-      "$ZOLA_CMD" serve -p 1111 >/dev/null 2>&1 &
+      "$ZOLA_CMD" serve --drafts -p 1111 >/dev/null 2>&1 &
       ZOLA_PID=$!
       cd "$CMS_DIR_PATH"
     fi
