@@ -135,12 +135,30 @@ function renderEntriesTable(entries) {
       <td>${entry.date || '—'}</td>
       <td>${statusBadge}</td>
       <td style="text-align: right;">
-        <button class="btn btn-sm edit-entry-btn" data-slug="${entry.slug}">Редактировать</button>
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+          <button class="btn btn-sm edit-entry-btn" data-slug="${entry.slug}">Редактировать</button>
+          <button class="btn btn-sm delete-entry-btn" data-slug="${entry.slug}" style="background: rgba(239,68,68,0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3);" title="Удалить пост">🗑️</button>
+        </div>
       </td>
     `;
     
     tr.querySelector('.edit-entry-btn').addEventListener('click', () => {
       window.location.hash = `#/edit/${entry.slug}`;
+    });
+
+    tr.querySelector('.delete-entry-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (confirm(`Удалить пост "${entry.title}"? Это действие необратимо.`)) {
+        try {
+          const res = await fetch(`/api/entry/${entry.slug}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error('Ошибка удаления');
+          showToast(`Пост "${entry.title}" удален`, 'success');
+          loadEntries();
+          updateGitStatus();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
     });
     
     tableBody.appendChild(tr);
@@ -195,8 +213,8 @@ function buildFormHTML(fields, parentPath = '') {
     // 2. Список объектов (например, список тамг {image, caption})
     if (field.type === 'object' && field.list) {
       html += `
-        <div class="panel" id="panel_${fieldPath.replace(/\./g, '_')}">
-          <div class="panel-title">${field.label}</div>
+        <div class="panel collapsed" id="panel_${fieldPath.replace(/\./g, '_')}">
+          <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">${field.label}</div>
           <div class="object-list-container" id="list_container_${fieldPath.replace(/\./g, '_')}" data-field-path="${fieldPath}">
             <!-- Блоки будут вставляться динамически при заполнении данными -->
           </div>
@@ -211,8 +229,8 @@ function buildFormHTML(fields, parentPath = '') {
     // 3. Специфический виджет родословной (inline pedigree, 10 полей в ряд)
     if (field.name === 'pedigree') {
       html += `
-        <div class="panel" id="panel_pedigree">
-          <div class="panel-title">Родословная протестированного</div>
+        <div class="panel collapsed" id="panel_pedigree">
+          <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">Родословная протестированного</div>
           <div class="pedigree-row-container">
             <span class="field-desc">Добавляйте предков по порядку (от самого дальнего к самому близкому). Пустые ячейки будут пропущены.</span>
             <div class="pedigree-grid" id="pedigreeGrid" data-field-path="${fieldPath}">
