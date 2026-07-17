@@ -204,7 +204,7 @@ app.post('/api/entry', async (req, res) => {
       await generatePreview(previewSlug, finalContentObj);
 
       // Сохраняем временный файл
-      const fileContent = matter.stringify('', finalContentObj);
+      const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
       await fs.writeFile(targetPath, fileContent);
 
       return res.json({ success: true, slug: previewSlug });
@@ -220,7 +220,7 @@ app.post('/api/entry', async (req, res) => {
 
     await generatePreview(nextSlug, finalContentObj);
 
-    const fileContent = matter.stringify('', finalContentObj);
+    const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
     await fs.writeFile(targetPath, fileContent);
 
     // Если имя файла изменилось, удаляем старый файл
