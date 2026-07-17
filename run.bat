@@ -67,7 +67,7 @@ if %errorlevel% equ 0 (
     echo [→] Запускаю локальный сервер предпросмотра Zola на порту 1111...
     if exist "..\aadna" (
       cd ..\aadna
-      start /b zola serve -p 1111 >nul 2>&1
+      start /b zola serve --drafts -p 1111 >nul 2>&1
       cd /d "%CMS_DIR%"
     )
   )
