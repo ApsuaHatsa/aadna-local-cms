@@ -7,6 +7,7 @@ import { insertMarkdown, setupEditorAttachments } from './editor.js';
 let CONFIG = null;
 let CURRENT_ENTRY = null;
 let ORIGINAL_SLUG = '';
+let activePreviewSlug = '';
 
 // Вспомогательные функции для работы с путями в объектах
 function setValueByPath(obj, path, value) {
@@ -747,7 +748,8 @@ async function saveEntry(actionType = 'draft') {
     return null;
   }
 
-  showToast('Сохранение файла на диск...', 'info');
+  const isPreview = actionType === 'preview';
+  showToast(isPreview ? 'Генерация временного предпросмотра...' : 'Сохранение файла на диск...', 'info');
 
   try {
     const response = await fetch('/api/entry', {
@@ -755,7 +757,8 @@ async function saveEntry(actionType = 'draft') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         originalSlug: ORIGINAL_SLUG,
-        data: data
+        data: data,
+        isPreview: isPreview
       })
     });
 
@@ -764,10 +767,17 @@ async function saveEntry(actionType = 'draft') {
     }
 
     const result = await response.json();
-    showToast('Пост успешно сохранен!', 'success');
     
-    // Обновляем статус Git
-    await updateGitStatus();
+    if (isPreview) {
+      showToast('Предпросмотр сгенерирован!', 'success');
+    } else {
+      showToast('Пост успешно сохранен!', 'success');
+    }
+    
+    // Обновляем статус Git (только при обычном сохранении, чтобы не дергать его при превью)
+    if (!isPreview) {
+      await updateGitStatus();
+    }
     
     if (actionType === 'publish') {
       // Открываем модалку коммита
@@ -776,7 +786,6 @@ async function saveEntry(actionType = 'draft') {
       // Возвращаемся к списку
       window.location.hash = '#/';
     }
-    // Если actionType === 'preview', просто остаемся на странице редактирования
     
     return result.slug;
   } catch (error) {
@@ -978,16 +987,14 @@ async function initApp() {
   document.getElementById('saveAndPublishBtn').addEventListener('click', () => saveEntry('publish'));
   
   document.getElementById('previewBtn').addEventListener('click', async () => {
-    const slug = await saveEntry('preview');
-    if (slug) {
+    const previewSlug = await saveEntry('preview');
+    if (previewSlug) {
+      const cleanSlug = previewSlug.replace('.cms-tmp-preview', '');
+      activePreviewSlug = cleanSlug;
       const pathInput = document.querySelector('input[data-field-path="path"]');
-      const pagePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : slug;
-      // Открываем вкладку локального сервера Zola (порт 1111)
-      window.open(`http://localhost:1111/${pagePath}/`, '_blank');
-      
-      // Обновляем текущий слаг, чтобы мы оставались в режиме редактирования этого поста
-      ORIGINAL_SLUG = slug;
-      window.location.hash = `#/edit/${slug}`;
+      const basePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : cleanSlug;
+      // Открываем вкладку локального сервера Zola (порт 1111) с префиксом -preview
+      window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
     }
   });
 
@@ -1026,6 +1033,13 @@ async function initApp() {
   // 3. Маршрутизатор (Router)
   const handleRoute = async () => {
     const hash = window.location.hash;
+    
+    // Если переходим на другую страницу (не редактирование того же поста),
+    // чистим временный файл предпросмотра
+    if (activePreviewSlug && !hash.includes(activePreviewSlug) && hash !== '#/new' && !hash.startsWith('#/edit/')) {
+      fetch(`/api/entry/${activePreviewSlug}/clear-preview`, { method: 'POST' }).catch(() => {});
+      activePreviewSlug = '';
+    }
     
     // Обновляем Git статус при каждом переходе
     updateGitStatus();
@@ -1086,6 +1100,14 @@ async function initApp() {
   };
 
   window.addEventListener('hashchange', handleRoute);
+  
+  // Авто-чистка при закрытии вкладки браузера
+  window.addEventListener('beforeunload', () => {
+    if (activePreviewSlug) {
+      navigator.sendBeacon(`/api/entry/${activePreviewSlug}/clear-preview`);
+    }
+  });
+
   // Первоначальный запуск роутера
   handleRoute();
 }

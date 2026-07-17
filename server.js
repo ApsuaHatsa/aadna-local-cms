@@ -160,12 +160,14 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 
 // 5. POST /api/entry - Сохранить/создать результат с автоматизациями
 app.post('/api/entry', async (req, res) => {
-  const { originalSlug, data } = req.body;
+  const { originalSlug, data, isPreview } = req.body;
 
   try {
     let existingContent = null;
-    if (originalSlug) {
-      const existingPath = path.join(RESULTS_DIR, `${originalSlug}.md`);
+    const cleanOriginalSlug = originalSlug ? originalSlug.replace('.cms-tmp-preview', '') : '';
+    
+    if (cleanOriginalSlug) {
+      const existingPath = path.join(RESULTS_DIR, `${cleanOriginalSlug}.md`);
       if (await fs.pathExists(existingPath)) {
         const rawExisting = await fs.readFile(existingPath, 'utf-8');
         existingContent = matter(rawExisting).data;
@@ -176,32 +178,62 @@ app.post('/api/entry', async (req, res) => {
     const { content: normalized, snpToSync } = normalizeAadnaContent(
       data, 
       existingContent, 
-      originalSlug
+      cleanOriginalSlug
     );
 
     const nextSlug = normalized.path.replace(/\/+$/, ''); // убираем слеш на конце для имени файла
-    const targetPath = path.join(RESULTS_DIR, `${nextSlug}.md`);
 
-    // 3. Релокация медиафайлов из корня в папку /media/results/{slug}/
+    if (isPreview) {
+      // Режим предпросмотра: сохраняем во временный файл
+      const previewSlug = `${nextSlug}.cms-tmp-preview`;
+      const targetPath = path.join(RESULTS_DIR, `${previewSlug}.md`);
+      
+      // Подменяем путь в самом файле, чтобы у Zola не было конфликтов дубликатов путей
+      normalized.path = `${nextSlug}-preview/`;
+      
+      // Настраиваем путь к OG-изображению для превью
+      if (normalized.extra) {
+        if (!normalized.extra.preview) normalized.extra.preview = {};
+        normalized.extra.preview.image = `/og/results/${previewSlug}.png`;
+      }
+
+      // Релокация медиафайлов (для превью используем оригинальный слаг, чтобы не дублировать папки)
+      const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized);
+      
+      // Генерируем временную OG-картинку
+      await generatePreview(previewSlug, finalContentObj);
+
+      // Сохраняем временный файл
+      const fileContent = matter.stringify('', finalContentObj);
+      await fs.writeFile(targetPath, fileContent);
+
+      return res.json({ success: true, slug: previewSlug });
+    }
+
+    // Обычное сохранение/публикация
+    const targetPath = path.join(RESULTS_DIR, `${nextSlug}.md`);
     const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized);
 
-    // 4. Синхронизация снип-путей через API snp.apsny.dev
     if (snpToSync) {
       await syncSnpPath(snpToSync);
     }
 
-    // 5. Генерация OG-превью изображения
     await generatePreview(nextSlug, finalContentObj);
 
-    // Сохраняем файл на диск
     const fileContent = matter.stringify('', finalContentObj);
     await fs.writeFile(targetPath, fileContent);
 
     // Если имя файла изменилось, удаляем старый файл
-    if (originalSlug && originalSlug !== nextSlug) {
-      const oldPath = path.join(RESULTS_DIR, `${originalSlug}.md`);
+    if (cleanOriginalSlug && cleanOriginalSlug !== nextSlug) {
+      const oldPath = path.join(RESULTS_DIR, `${cleanOriginalSlug}.md`);
       await fs.remove(oldPath);
     }
+
+    // Чистим временные файлы предпросмотра
+    const previewFile = path.join(RESULTS_DIR, `${nextSlug}.cms-tmp-preview.md`);
+    const previewImage = path.join(AADNA_PATH, `static/og/results/${nextSlug}.cms-tmp-preview.png`);
+    await fs.remove(previewFile);
+    await fs.remove(previewImage);
 
     res.json({ success: true, slug: nextSlug });
   } catch (error) {
@@ -245,6 +277,24 @@ app.post('/api/entry/:slug/revert', async (req, res) => {
       await fs.remove(mediaFolder);
     }
 
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5.6 POST /api/entry/:slug/clear-preview - Очистка временных файлов предпросмотра
+app.post('/api/entry/:slug/clear-preview', async (req, res) => {
+  const { slug } = req.params;
+  const cleanSlug = slug.replace('.cms-tmp-preview', '');
+  
+  const previewFile = path.join(RESULTS_DIR, `${cleanSlug}.cms-tmp-preview.md`);
+  const previewImage = path.join(AADNA_PATH, `static/og/results/${cleanSlug}.cms-tmp-preview.png`);
+
+  try {
+    await fs.remove(previewFile);
+    await fs.remove(previewImage);
     res.json({ success: true });
   } catch (error) {
     console.error(error);
