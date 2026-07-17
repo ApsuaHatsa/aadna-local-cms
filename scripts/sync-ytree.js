@@ -121,8 +121,8 @@ async function main() {
       }
       
       const imgHtml = 
-        `<img src="/media/results/${slug}/ytree_${cladeClean}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${cladeClean}">\n` +
-        `<img src="/media/results/${slug}/ytree_${cladeClean}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${cladeClean}">`;
+        `<img src="/media/results/${slug}/ytree_${cladeClean}_light.png" class="no-zoom block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${cladeClean}">\n` +
+        `<img src="/media/results/${slug}/ytree_${cladeClean}_dark.png" class="no-zoom hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${cladeClean}">`;
         
       if (fetchRes.link) {
         parsed.data.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;

@@ -341,8 +341,8 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
 
             // Вставляем HTML-код с двумя темами
             const imgHtml =
-              `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">\n` +
-              `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">`;
+              `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="no-zoom block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${clade}">\n` +
+              `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="no-zoom hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${clade}">`;
 
             if (fetchRes.link) {
               normalized.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
