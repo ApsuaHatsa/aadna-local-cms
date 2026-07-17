@@ -8,6 +8,11 @@ let CONFIG = null;
 let CURRENT_ENTRY = null;
 let ORIGINAL_SLUG = '';
 let activePreviewSlug = '';
+let COLLECTIONS = [];
+let ACTIVE_COLLECTION = 'results';
+let ACTIVE_COLLECTION_CONFIG = null;
+let YAML_CONFIG_TEXT = '';
+let allEntries = [];
 
 // Вспомогательные функции для работы с путями в объектах
 function setValueByPath(obj, path, value) {
@@ -91,68 +96,141 @@ async function updateGitStatus() {
 }
 
 // -----------------------------------------------------------------------------
-// Загрузка списков и отрисовка таблицы
+// Рендеринг боковой панели (Sidebar)
 // -----------------------------------------------------------------------------
-let allEntries = [];
+function renderSidebar() {
+  const nav = document.getElementById('collectionsNav');
+  nav.innerHTML = '';
+  
+  COLLECTIONS.forEach(col => {
+    const a = document.createElement('a');
+    a.href = `#/collection/${col.name}`;
+    a.className = `sidebar-nav-item ${ACTIVE_COLLECTION === col.name && window.location.hash !== '#/configuration' ? 'active' : ''}`;
+    
+    let icon = '📁';
+    if (col.name === 'results') icon = '🧬';
+    else if (col.name === 'articles') icon = '📝';
+    else if (col.name === 'projects') icon = '💼';
+    else if (col.name === 'pages') icon = '📄';
 
+    a.innerHTML = `<span class="icon">${icon}</span><span class="label">${col.label}</span>`;
+    nav.appendChild(a);
+  });
+
+  // Подсвечиваем Настройки CMS если мы там
+  const navConfig = document.getElementById('navItemConfig');
+  if (window.location.hash === '#/configuration') {
+    navConfig.classList.add('active');
+  } else {
+    navConfig.classList.remove('active');
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Загрузка списков и динамическая отрисовка таблицы
+// -----------------------------------------------------------------------------
 async function loadEntries() {
   const tableBody = document.getElementById('entriesTableBody');
-  tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--color-muted);">Загрузка постов...</td></tr>';
+  const fields = ACTIVE_COLLECTION_CONFIG?.view?.fields || ['title', 'date'];
+  const colCount = fields.length + 2;
+  tableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: var(--color-muted);">Загрузка постов...</td></tr>`;
   
   try {
-    const res = await fetch('/api/entries');
-    if (!res.ok) throw new Error('Не удалось загрузить список результатов');
+    const res = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entries`);
+    if (!res.ok) throw new Error('Не удалось загрузить список записей');
     allEntries = await res.json();
     renderEntriesTable(allEntries);
   } catch (error) {
     showToast(error.message, 'error');
-    tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--color-danger);">${error.message}</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: var(--color-danger);">${error.message}</td></tr>`;
   }
+}
+
+function buildTableHeader() {
+  const head = document.getElementById('entriesTableHead');
+  const fields = ACTIVE_COLLECTION_CONFIG?.view?.fields || ['title', 'date'];
+  
+  const fieldLabels = {
+    'title': 'Заголовок',
+    'date': 'Дата',
+    'extra.surname': 'Фамилия',
+    'extra.result_type': 'Тип',
+    'extra.y_haplogroup': 'Гаплогруппа',
+    'extra.y_subclade': 'Субклад',
+    'extra.settlement': 'Селение',
+    'extra.subethnos': 'Субэтнос',
+    'authors': 'Авторы',
+    'path': 'Путь'
+  };
+
+  let html = '';
+  fields.forEach(f => {
+    const label = fieldLabels[f] || f.split('.').pop();
+    html += `<th>${label}</th>`;
+  });
+  html += `<th>Статус</th>`;
+  html += `<th style="text-align: right;">Действия</th>`;
+  head.innerHTML = `<tr>${html}</tr>`;
 }
 
 function renderEntriesTable(entries) {
   const tableBody = document.getElementById('entriesTableBody');
   tableBody.innerHTML = '';
   
+  const fields = ACTIVE_COLLECTION_CONFIG?.view?.fields || ['title', 'date'];
+  const colCount = fields.length + 2;
+  
   if (entries.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--color-muted);">Результаты не найдены</td></tr>';
+    tableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: var(--color-muted);">Записи не найдены</td></tr>`;
     return;
   }
   
   entries.forEach(entry => {
     const tr = document.createElement('tr');
     
+    let cellsHtml = '';
+    fields.forEach(f => {
+      let val = getValueByPath(entry, f);
+      if (Array.isArray(val)) {
+        val = val.join(', ');
+      }
+      if (f === 'title' || f === 'extra.surname') {
+        cellsHtml += `<td style="font-weight: 600; color: white;">${val || entry.slug}</td>`;
+      } else if (f === 'extra.y_haplogroup') {
+        cellsHtml += `<td><span style="font-weight: bold; color: var(--color-accent); font-family: monospace;">${val}</span></td>`;
+      } else {
+        cellsHtml += `<td>${val ?? ''}</td>`;
+      }
+    });
+
     const statusBadge = entry.draft 
       ? '<span class="badge-draft">Черновик</span>' 
       : '<span class="badge-published">Опубликован</span>';
-      
-    tr.innerHTML = `
-      <td style="font-weight: 600; color: white;">${entry.title}</td>
-      <td>
-        <span style="font-weight: bold; color: var(--color-accent); font-family: monospace;">${entry.haplogroup}</span>
-        ${entry.subclade ? `<span style="color: var(--color-muted); font-size: 0.8rem; font-family: monospace; margin-left: 0.5rem;">(${entry.subclade})</span>` : ''}
-      </td>
-      <td>${entry.date || '—'}</td>
-      <td>${statusBadge}</td>
+
+    cellsHtml += `<td>${statusBadge}</td>`;
+
+    cellsHtml += `
       <td style="text-align: right;">
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
           <button class="btn btn-sm edit-entry-btn" data-slug="${entry.slug}">Редактировать</button>
-          <button class="btn btn-sm delete-entry-btn" data-slug="${entry.slug}" style="background: rgba(239,68,68,0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3);" title="Удалить пост">🗑️</button>
+          <button class="btn btn-sm delete-entry-btn" data-slug="${entry.slug}" style="background: rgba(239,68,68,0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3);" title="Удалить">🗑️</button>
         </div>
       </td>
     `;
     
+    tr.innerHTML = cellsHtml;
+    
     tr.querySelector('.edit-entry-btn').addEventListener('click', () => {
-      window.location.hash = `#/edit/${entry.slug}`;
+      window.location.hash = `#/collection/${ACTIVE_COLLECTION}/edit/${entry.slug}`;
     });
 
     tr.querySelector('.delete-entry-btn').addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (confirm(`Удалить пост "${entry.title}"? Это действие необратимо.`)) {
+      if (confirm(`Удалить запись "${entry.title || entry.slug}"? Это действие необратимо.`)) {
         try {
-          const res = await fetch(`/api/entry/${entry.slug}`, { method: 'DELETE' });
+          const res = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entry/${entry.slug}`, { method: 'DELETE' });
           if (!res.ok) throw new Error('Ошибка удаления');
-          showToast(`Пост "${entry.title}" удален`, 'success');
+          showToast(`Запись "${entry.title || entry.slug}" удалена`, 'success');
           loadEntries();
           updateGitStatus();
         } catch (err) {
@@ -173,12 +251,13 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
     return;
   }
   
-  const filtered = allEntries.filter(entry => 
-    entry.title.toLowerCase().includes(query) ||
-    entry.surname.toLowerCase().includes(query) ||
-    entry.haplogroup.toLowerCase().includes(query) ||
-    entry.subclade.toLowerCase().includes(query)
-  );
+  const filtered = allEntries.filter(entry => {
+    const titleMatch = (entry.title || '').toLowerCase().includes(query);
+    const surnameMatch = (entry.surname || '').toLowerCase().includes(query);
+    const haploMatch = (entry.haplogroup || '').toLowerCase().includes(query);
+    const subcladeMatch = (entry.subclade || '').toLowerCase().includes(query);
+    return titleMatch || surnameMatch || haploMatch || subcladeMatch;
+  });
   renderEntriesTable(filtered);
 });
 
@@ -189,7 +268,6 @@ function buildFormHTML(fields, parentPath = '') {
   let html = '';
   
   fields.forEach(field => {
-    // Пропускаем скрытые системные поля
     if (field.hidden) return;
     
     const fieldPath = parentPath ? `${parentPath}.${field.name}` : field.name;
@@ -209,7 +287,7 @@ function buildFormHTML(fields, parentPath = '') {
       `;
       return;
     }
-
+ 
     // 2. Список объектов (например, список тамг {image, caption})
     if (field.type === 'object' && field.list) {
       html += `
@@ -226,8 +304,8 @@ function buildFormHTML(fields, parentPath = '') {
       return;
     }
 
-    // 3. Специфический виджет родословной (inline pedigree, 10 полей в ряд)
-    if (field.name === 'pedigree') {
+    // 3. Специфический виджет родословной (только для pedigree в results)
+    if (field.name === 'pedigree' && ACTIVE_COLLECTION === 'results') {
       html += `
         <div class="panel collapsed" id="panel_pedigree">
           <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">Родословная протестированного</div>
@@ -313,7 +391,7 @@ function buildFormHTML(fields, parentPath = '') {
         </div>
       `;
     } 
-    else if (field.name === 'taxonomies') {
+    else if (field.name === 'taxonomies' && ACTIVE_COLLECTION === 'results') {
       inputControl = `
         <div class="taxonomies-preview" id="taxonomiesPreview" style="display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.25); border-radius: 6px; border: 1px solid var(--color-border); min-height: 40px; align-items: center;">
           <span style="color: var(--color-muted); font-size: 0.8rem;">Автоматические таксономии будут пересчитаны при сохранении</span>
@@ -326,7 +404,7 @@ function buildFormHTML(fields, parentPath = '') {
     else if (field.type === 'number') {
       inputControl = `<input type="number" data-field-path="${fieldPath}">`;
     } 
-    else if (field.list) { // Строковый список (например, aliases)
+    else if (field.list) {
       inputControl = `
         <div class="string-list-container" id="str_list_${fieldPath.replace(/\./g, '_')}" data-field-path="${fieldPath}">
           <div class="string-list-items"></div>
@@ -334,14 +412,11 @@ function buildFormHTML(fields, parentPath = '') {
         </div>
       `;
     }
-    else { // Обычная строка
+    else {
       inputControl = `<input type="text" data-field-path="${fieldPath}">`;
     }
 
-    // Оборачиваем в форму
     const fullWidthClass = (field.type === 'rich-text' || field.type === 'text') ? 'full-width' : '';
-    
-    // Для чекбокса лейбл уже внутри группы
     const showLabel = field.type !== 'boolean';
     
     html += `
@@ -364,7 +439,6 @@ function initializeFormEvents() {
   document.querySelectorAll('.editor-container').forEach(container => {
     const textarea = container.querySelector('textarea');
     
-    // Toolbar кнопки
     container.querySelectorAll('.editor-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const action = btn.getAttribute('data-action');
@@ -372,8 +446,7 @@ function initializeFormEvents() {
       });
     });
 
-    // Настройка Drag over и Ctrl+V для редактора
-    setupEditorAttachments(textarea, showToast);
+    setupEditorAttachments(textarea, showToast, () => ACTIVE_COLLECTION);
   });
 
   // Навешиваем обработчики для загрузчиков картинок
@@ -383,7 +456,6 @@ function initializeFormEvents() {
     const previewDiv = area.querySelector('.uploader-preview');
     
     area.addEventListener('click', (e) => {
-      // Игнорируем клик, если нажата кнопка удаления превью
       if (e.target.classList.contains('remove-img-btn')) return;
       fileInput.click();
     });
@@ -414,6 +486,22 @@ function initializeFormEvents() {
     });
   });
 
+  // Навешиваем обработчики для кнопок "Добавить" в массивах объектов
+  CONFIG?.content?.forEach(col => {
+    if (col.name !== ACTIVE_COLLECTION) return;
+    col.fields.forEach(field => {
+      if (field.type === 'object' && field.list) {
+        const fieldPath = field.name;
+        const addBtn = document.getElementById(`add_btn_${fieldPath.replace(/\./g, '_')}`);
+        if (addBtn) {
+          addBtn.addEventListener('click', () => {
+            addObjectListRow(fieldPath, null);
+          });
+        }
+      }
+    });
+  });
+
   // Авто-генерация URL слага из Заголовка
   const titleInput = document.querySelector('input[data-field-path="title"]');
   const pathInput = document.querySelector('input[data-field-path="path"]');
@@ -422,44 +510,25 @@ function initializeFormEvents() {
     titleInput.addEventListener('blur', () => {
       if (!pathInput.value.trim() && titleInput.value.trim()) {
         const title = titleInput.value.trim();
-        // Внутренний slugify для автозаполнения
-        fetch(`/api/config`)
-          .then(() => {
-            const rawSlug = title.toLowerCase()
-              .replace(/[^а-яа-яëa-z0-9\s_-]/gi, '')
-              .trim();
-            // Делаем простую латинизацию на клиенте
-            const CYR = {
-              'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'
-            };
-            let slug = '';
-            for (let i = 0; i < rawSlug.length; i++) {
-              const char = rawSlug[i];
-              slug += CYR[char] !== undefined ? CYR[char] : char;
-            }
-            slug = slug.toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
-            if (slug) {
-              pathInput.value = `${slug}/`;
-              pathInput.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-          });
+        const rawSlug = title.toLowerCase()
+          .replace(/[^а-яа-яёa-z0-9\s_-]/gi, '')
+          .trim();
+        const CYR = {
+          'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'
+        };
+        let slug = '';
+        for (let i = 0; i < rawSlug.length; i++) {
+          const char = rawSlug[i];
+          slug += CYR[char] !== undefined ? CYR[char] : char;
+        }
+        slug = slug.toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+        if (slug) {
+          pathInput.value = `${slug}/`;
+          pathInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
       }
     });
   }
-
-  // Настройка списков объектов (например, Tamgas)
-  CONFIG.fields.forEach(field => {
-    if (field.type === 'object' && field.list) {
-      const fieldPath = field.name;
-      const addBtn = document.getElementById(`add_btn_${fieldPath.replace(/\./g, '_')}`);
-      
-      if (addBtn) {
-        addBtn.addEventListener('click', () => {
-          addObjectListRow(fieldPath, null);
-        });
-      }
-    }
-  });
 }
 
 // -----------------------------------------------------------------------------
@@ -471,7 +540,7 @@ async function handleImageUpload(file, hiddenInput, previewDiv) {
   try {
     const pathInput = document.querySelector('input[data-field-path="path"]');
     const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
-    const collection = 'results';
+    const collection = ACTIVE_COLLECTION;
 
     const formData = new FormData();
     formData.append('image', file, file.name);
@@ -488,13 +557,10 @@ async function handleImageUpload(file, hiddenInput, previewDiv) {
 
     const result = await response.json();
     
-    // Сохраняем новое значение в input
     hiddenInput.value = result.url;
     hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
     
-    // Отрисовываем превью
     renderImagePreview(result.url, previewDiv);
-    
     showToast('Файл успешно загружен!', 'success');
   } catch (error) {
     console.error(error);
@@ -516,7 +582,7 @@ function renderImagePreview(url, previewDiv) {
   previewDiv.style.display = 'flex';
 
   previewDiv.querySelector('.remove-img-btn').addEventListener('click', (e) => {
-    e.stopPropagation(); // Отменяем вызов выбора файла
+    e.stopPropagation();
     
     const hiddenInput = previewDiv.parentElement.querySelector('input[type="hidden"]');
     hiddenInput.value = '';
@@ -564,7 +630,7 @@ function addObjectListRow(fieldPath, data = null) {
   row.innerHTML = `
     <!-- Блок картинки -->
     <div class="uploader-area" id="uploader_${itemPath.replace(/\./g, '_')}">
-      <span style="font-size: 0.75rem; color: var(--color-muted);">Тамга</span>
+      <span style="font-size: 0.75rem; color: var(--color-muted);">Изображение</span>
       <input type="file" accept="image/*" style="display: none;" id="file_input_${itemPath.replace(/\./g, '_')}">
       <input type="hidden" data-object-field-path="image" value="${data?.image || ''}">
       <div class="uploader-preview" id="preview_${itemPath.replace(/\./g, '_')}" style="display: none;"></div>
@@ -574,9 +640,9 @@ function addObjectListRow(fieldPath, data = null) {
     <div class="item-fields">
       <div class="form-group">
         <label>Подпись под фото</label>
-        <input type="text" data-object-field-path="caption" value="${data?.caption || ''}" placeholder="например: Тамга рода Ардзинба">
+        <input type="text" data-object-field-path="caption" value="${data?.caption || ''}" placeholder="например: Изображение...">
       </div>
-      <button type="button" class="remove-item-btn">Удалить тамгу</button>
+      <button type="button" class="remove-item-btn">Удалить элемент</button>
     </div>
   `;
 
@@ -605,28 +671,19 @@ function addObjectListRow(fieldPath, data = null) {
   // Кнопка удаления строки
   row.querySelector('.remove-item-btn').addEventListener('click', () => {
     row.remove();
-    reindexObjectList(container);
   });
 
   container.appendChild(row);
-}
-
-function reindexObjectList(container) {
-  // Нам не нужно делать сложный переиндекс, так как мы собираем данные по порядку DOM-элементов
 }
 
 // -----------------------------------------------------------------------------
 // Заполнение формы данными (Populate / Load)
 // -----------------------------------------------------------------------------
 function populateForm(data) {
-  // 1. Очищаем форму
   document.getElementById('resultForm').reset();
   
-  // Очищаем списки объектов
   document.querySelectorAll('.object-list-container').forEach(c => c.innerHTML = '');
-  // Очищаем списки строк
   document.querySelectorAll('.string-list-container .string-list-items').forEach(c => c.innerHTML = '');
-  // Очищаем превью загрузчиков
   document.querySelectorAll('.uploader-preview').forEach(p => {
     p.innerHTML = '';
     p.style.display = 'none';
@@ -634,13 +691,12 @@ function populateForm(data) {
 
   CURRENT_ENTRY = data;
 
-  // 2. Заполняем поля по путям
-  // Корневые поля и extra
+  // Заполняем поля по путям
   document.querySelectorAll('[data-field-path]').forEach(control => {
     const path = control.getAttribute('data-field-path');
     
     // Пропускаем вложенные списки
-    if (path === 'extra.pedigree') {
+    if (path === 'extra.pedigree' && ACTIVE_COLLECTION === 'results') {
       const pedigreeVal = getValueByPath(data, 'extra.pedigree') || [];
       const pedigreeInputs = document.querySelectorAll('#pedigreeGrid input');
       pedigreeInputs.forEach((input, index) => {
@@ -676,7 +732,6 @@ function populateForm(data) {
       control.checked = !!val;
     } 
     else if (control.type === 'hidden') {
-      // Это загрузчик изображения
       control.value = val;
       const previewDiv = control.parentElement.querySelector('.uploader-preview');
       renderImagePreview(val, previewDiv);
@@ -686,7 +741,7 @@ function populateForm(data) {
     }
   });
 
-  // 3. Заполняем списки строк (например, aliases)
+  // Заполняем списки строк
   document.querySelectorAll('.string-list-container').forEach(container => {
     const path = container.getAttribute('data-field-path');
     const values = getValueByPath(data, path);
@@ -698,7 +753,7 @@ function populateForm(data) {
     }
   });
 
-  // 4. Заполняем списки объектов (например, tamga)
+  // Заполняем списки объектов
   document.querySelectorAll('.object-list-container').forEach(container => {
     const path = container.getAttribute('data-field-path');
     const items = getValueByPath(data, path);
@@ -709,13 +764,12 @@ function populateForm(data) {
     }
   });
 
-  // 5. Отображаем бейджи таксономий в превью
+  // Отображаем бейджи таксономий в превью (только для results)
   const taxPreview = document.getElementById('taxonomiesPreview');
-  if (taxPreview) {
+  if (taxPreview && ACTIVE_COLLECTION === 'results') {
     taxPreview.innerHTML = '';
     let hasTax = false;
     
-    // Получаем текущие таксономии из объекта данных
     const taxonomies = data.taxonomies || {};
     for (const [key, val] of Object.entries(taxonomies)) {
       const list = Array.isArray(val) ? val : [val];
@@ -751,9 +805,7 @@ function serializeForm() {
   // 1. Собираем стандартные плоские поля
   document.querySelectorAll('[data-field-path]').forEach(control => {
     const path = control.getAttribute('data-field-path');
-    if (path === 'extra.pedigree') return; // обрабатывается отдельно
-    
-    // Пропускаем контейнеры списков строк
+    if (path === 'extra.pedigree') return;
     if (control.classList.contains('string-list-container')) return;
 
     let val = undefined;
@@ -783,9 +835,9 @@ function serializeForm() {
     }
   });
 
-  // 2. Собираем pedigree (10 полей в ряд)
+  // 2. Собираем pedigree (только для results)
   const pedigreeGrid = document.getElementById('pedigreeGrid');
-  if (pedigreeGrid) {
+  if (pedigreeGrid && ACTIVE_COLLECTION === 'results') {
     const path = pedigreeGrid.getAttribute('data-field-path');
     const inputs = pedigreeGrid.querySelectorAll('input');
     const values = Array.from(inputs).map(inp => inp.value.trim()).filter(Boolean);
@@ -794,7 +846,7 @@ function serializeForm() {
     }
   }
 
-  // 3. Собираем списки строк (например, aliases)
+  // 3. Собираем списки строк
   document.querySelectorAll('.string-list-container').forEach(container => {
     const path = container.getAttribute('data-field-path');
     const inputs = container.querySelectorAll('input');
@@ -804,7 +856,7 @@ function serializeForm() {
     }
   });
 
-  // 4. Собираем списки объектов (например, tamga)
+  // 4. Собираем списки объектов
   document.querySelectorAll('.object-list-container').forEach(container => {
     const path = container.getAttribute('data-field-path');
     const items = [];
@@ -844,7 +896,7 @@ async function saveEntry(actionType = 'draft') {
   showToast(isPreview ? 'Генерация временного предпросмотра...' : 'Сохранение файла на диск...', 'info');
 
   try {
-    const response = await fetch('/api/entry', {
+    const response = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -863,20 +915,17 @@ async function saveEntry(actionType = 'draft') {
     if (isPreview) {
       showToast('Предпросмотр сгенерирован!', 'success');
     } else {
-      showToast('Пост успешно сохранен!', 'success');
+      showToast('Запись успешно сохранена!', 'success');
     }
     
-    // Обновляем статус Git (только при обычном сохранении, чтобы не дергать его при превью)
     if (!isPreview) {
       await updateGitStatus();
     }
     
     if (actionType === 'publish') {
-      // Открываем модалку коммита
       openPublishModal();
     } else if (actionType === 'draft') {
-      // Возвращаемся к списку
-      window.location.hash = '#/';
+      window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
     }
     
     return result.slug;
@@ -895,13 +944,11 @@ function generateCommitMessage(status) {
     return '';
   }
 
-  // 1. Поищем файлы результатов в content/results/
-  const resultFiles = status.files.filter(f => f.file.startsWith('content/results/'));
-
+  const resultFiles = status.files.filter(f => f.file.startsWith('content/'));
   if (resultFiles.length === 1) {
     const file = resultFiles[0];
     const filename = file.file.split('/').pop().replace(/\.md$/, '');
-    const name = filename.split('_')[0]; // извлекаем фамилию
+    const name = filename.split('_')[0];
 
     if (file.status === 'A' || file.status === '??') {
       return `add: ${name}`.substring(0, 30);
@@ -911,17 +958,9 @@ function generateCommitMessage(status) {
       return `remove: ${name}`.substring(0, 30);
     }
   } else if (resultFiles.length > 1) {
-    const statuses = new Set(resultFiles.map(f => f.status));
-    if (statuses.size === 1) {
-      const statusChar = [...statuses][0];
-      if (statusChar === 'A' || statusChar === '??') return 'add: multiple results';
-      if (statusChar === 'M') return 'update: multiple results';
-      if (statusChar === 'D') return 'remove: multiple results';
-    }
-    return 'update: results';
+    return 'update: website content';
   }
 
-  // 2. Если медиа файлы
   const mediaFiles = status.files.filter(f => f.file.startsWith('static/'));
   if (mediaFiles.length > 0) {
     return 'update: media assets';
@@ -953,7 +992,7 @@ async function openPublishModal() {
     
     if (status.success) {
       summary.innerText = `Изменено файлов: ${status.totalChanges} (${status.modified} изм., ${status.added + status.untracked} доб., ${status.deleted} уд.)`;
-      commitInput.placeholder = `например: add ${ORIGINAL_SLUG || 'new'} post`;
+      commitInput.placeholder = `например: add new post`;
       commitInput.value = generateCommitMessage(status);
       
       if (status.files && status.files.length > 0) {
@@ -963,13 +1002,13 @@ async function openPublishModal() {
           let statusChar = f.status;
           
           if (f.status === 'M') {
-            color = '#6366F1'; // Синий/индиго для измененных
+            color = '#6366F1';
             statusChar = 'Изм.';
           } else if (f.status === 'A' || f.status === '??') {
-            color = 'var(--color-accent)'; // Бирюзовый для новых
+            color = 'var(--color-accent)';
             statusChar = 'Нов.';
           } else if (f.status === 'D') {
-            color = 'var(--color-danger)'; // Красный для удаленных
+            color = 'var(--color-danger)';
             statusChar = 'Удл.';
           }
           
@@ -986,7 +1025,6 @@ async function openPublishModal() {
           filesList.appendChild(item);
         });
 
-        // Запрашиваем и рендерим текстовый diff
         try {
           const diffRes = await fetch('/api/git-diff');
           const diffData = await diffRes.json();
@@ -999,7 +1037,7 @@ async function openPublishModal() {
       }
     }
   } catch (e) {
-    summary.innerText = 'Не удалось загрузить детальный статус Git';
+    summary.innerText = 'Не удалось загрузить статус Git';
   }
   
   modal.classList.add('active');
@@ -1010,7 +1048,7 @@ function renderDiffText(diffText) {
   const diffContainer = document.getElementById('gitDiffContainer');
   
   if (!diffText || diffText.trim() === '') {
-    diffContent.innerHTML = '<span style="color: var(--color-muted);">Нет текстовых изменений (возможно, изменены только бинарные файлы).</span>';
+    diffContent.innerHTML = '<span style="color: var(--color-muted);">Нет изменений в файлах.</span>';
     diffContainer.style.display = 'block';
     return;
   }
@@ -1023,13 +1061,13 @@ function renderDiffText(diffText) {
       .replace(/>/g, '&gt;');
       
     if (safeLine.startsWith('+') && !safeLine.startsWith('+++')) {
-      return `<span style="color: #10B981;">${safeLine}</span>`; // Зеленый для добавлений
+      return `<span style="color: #10B981;">${safeLine}</span>`;
     } else if (safeLine.startsWith('-') && !safeLine.startsWith('---')) {
-      return `<span style="color: #EF4444;">${safeLine}</span>`; // Красный для удалений
+      return `<span style="color: #EF4444;">${safeLine}</span>`;
     } else if (safeLine.startsWith('@@')) {
-      return `<span style="color: #6366F1;">${safeLine}</span>`; // Синий для хуков
+      return `<span style="color: #6366F1;">${safeLine}</span>`;
     } else if (safeLine.startsWith('diff ') || safeLine.startsWith('index ')) {
-      return `<span style="color: #FFF; font-weight: bold;">${safeLine}</span>`; // Белый для метаданных
+      return `<span style="color: #FFF; font-weight: bold;">${safeLine}</span>`;
     }
     return safeLine;
   });
@@ -1068,52 +1106,72 @@ async function startGitPublish() {
       consoleLog.innerText += result.stdout + '\n\n> Успешно опубликовано!';
       showToast('Сайт успешно опубликован на GitHub!', 'success');
       
-      // Закрываем модалку через пару секунд и идем к списку
       setTimeout(() => {
         closePublishModal();
-        window.location.hash = '#/';
+        window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
       }, 2000);
     } else {
       consoleLog.innerText += 'ОШИБКА:\n' + result.stderr;
       showToast('Ошибка коммита в Git', 'error');
     }
-    
-    await updateGitStatus();
   } catch (error) {
-    consoleLog.innerText += 'Ошибка запроса к API:\n' + error.message;
+    consoleLog.innerText += 'Ошибка API:\n' + error.message;
     showToast(error.message, 'error');
   }
+}
+
+// -----------------------------------------------------------------------------
+// Рендеринг панели настроек конфигурации .pages.yml
+// -----------------------------------------------------------------------------
+function renderConfigPanel() {
+  const listDiv = document.getElementById('configCollectionsList');
+  listDiv.innerHTML = '';
+  
+  CONFIG.content.forEach(col => {
+    const item = document.createElement('div');
+    item.className = 'config-collection-item';
+    item.innerHTML = `
+      <span class="title">${col.label} (${col.name})</span>
+      <span class="path">Папка: ${col.path}</span>
+    `;
+    listDiv.appendChild(item);
+  });
+
+  const yamlInput = document.getElementById('configYamlInput');
+  yamlInput.value = YAML_CONFIG_TEXT;
+
+  const badge = document.getElementById('yamlValidationBadge');
+  badge.className = 'yaml-validation-badge badge-valid';
+  badge.innerText = 'Синтаксис верен';
 }
 
 // -----------------------------------------------------------------------------
 // Инициализация SPA и маршрутизатора
 // -----------------------------------------------------------------------------
 async function initApp() {
-  // 1. Загружаем конфиг полей с сервера
   try {
     const res = await fetch('/api/config');
     if (!res.ok) throw new Error('Не удалось получить конфигурацию полей');
-    CONFIG = await res.json();
+    const data = await res.json();
     
-    // Строим HTML полей формы
-    const container = document.getElementById('dynamicFormFields');
-    container.innerHTML = buildFormHTML(CONFIG.fields);
+    CONFIG = data.config;
+    YAML_CONFIG_TEXT = data.raw;
+    COLLECTIONS = CONFIG.content || [];
     
-    // Навешиваем обработчики событий
-    initializeFormEvents();
+    renderSidebar();
   } catch (error) {
     console.error(error);
     showToast(error.message, 'error');
     return;
   }
 
-  // 2. Настраиваем кнопки
+  // Настраиваем кнопки
   document.getElementById('createNewBtn').addEventListener('click', () => {
-    window.location.hash = '#/new';
+    window.location.hash = `#/collection/${ACTIVE_COLLECTION}/new`;
   });
   
   document.getElementById('backToListBtn').addEventListener('click', () => {
-    window.location.hash = '#/';
+    window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
   });
 
   document.getElementById('saveDraftBtn').addEventListener('click', () => saveEntry('draft'));
@@ -1126,7 +1184,7 @@ async function initApp() {
       activePreviewSlug = cleanSlug;
       const pathInput = document.querySelector('input[data-field-path="path"]');
       const basePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : cleanSlug;
-      // Открываем вкладку локального сервера Zola (порт 1111) с префиксом -preview
+      
       window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
     }
   });
@@ -1134,13 +1192,13 @@ async function initApp() {
   document.getElementById('revertEntryBtn').addEventListener('click', async () => {
     if (!ORIGINAL_SLUG) return;
     
-    if (confirm('Вы действительно хотите хотите отменить все локальные изменения этого поста и вернуть его к исходному состоянию из Git?')) {
+    if (confirm('Вы действительно хотите отменить все локальные изменения этой записи и вернуть ее к исходному состоянию из Git?')) {
       showToast('Откат изменений...', 'info');
       try {
-        const res = await fetch(`/api/entry/${ORIGINAL_SLUG}/revert`, { method: 'POST' });
+        const res = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entry/${ORIGINAL_SLUG}/revert`, { method: 'POST' });
         if (!res.ok) throw new Error('Не удалось откатить изменения');
         showToast('Изменения успешно отменены!', 'success');
-        window.location.hash = '#/';
+        window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -1150,16 +1208,48 @@ async function initApp() {
   document.getElementById('deleteEntryBtn').addEventListener('click', async () => {
     if (!ORIGINAL_SLUG) return;
 
-    if (confirm('Вы уверены, что хотите навсегда удалить этот результат, всю связанную с ним медиа-папку и изображения превью?')) {
+    if (confirm('Вы уверены, что хотите навсегда удалить эту запись, всю связанную с ней медиа-папку и изображения превью?')) {
       showToast('Удаление поста...', 'info');
       try {
-        const res = await fetch(`/api/entry/${ORIGINAL_SLUG}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Не удалось удалить пост');
-        showToast('Пост успешно удален!', 'success');
-        window.location.hash = '#/';
+        const res = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entry/${ORIGINAL_SLUG}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Не удалось удалить запись');
+        showToast('Запись успешно удалена!', 'success');
+        window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
       } catch (err) {
         showToast(err.message, 'error');
       }
+    }
+  });
+
+  document.getElementById('saveConfigBtn').addEventListener('click', async () => {
+    const yamlText = document.getElementById('configYamlInput').value;
+    const badge = document.getElementById('yamlValidationBadge');
+    
+    showToast('Сохранение конфигурации...', 'info');
+    try {
+      const response = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw: yamlText })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Ошибка сохранения конфигурации');
+      }
+
+      showToast('Настройки CMS успешно сохранены!', 'success');
+      badge.className = 'yaml-validation-badge badge-valid';
+      badge.innerText = 'Синтаксис верен';
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, 'error');
+      badge.className = 'yaml-validation-badge badge-invalid';
+      badge.innerText = 'Синтаксическая ошибка';
     }
   });
   
@@ -1183,84 +1273,115 @@ async function initApp() {
   const handleRoute = async () => {
     const hash = window.location.hash;
     
-    // Если переходим на другую страницу (не редактирование того же поста),
-    // чистим временный файл предпросмотра
-    if (activePreviewSlug && !hash.includes(activePreviewSlug) && hash !== '#/new' && !hash.startsWith('#/edit/')) {
-      fetch(`/api/entry/${activePreviewSlug}/clear-preview`, { method: 'POST' }).catch(() => {});
+    // Чистим временные файлы предпросмотра при уходе со страницы
+    if (activePreviewSlug && !hash.includes(activePreviewSlug) && !hash.includes('/new') && !hash.includes('/edit/')) {
+      fetch(`/api/collections/${ACTIVE_COLLECTION}/entry/${activePreviewSlug}/clear-preview`, { method: 'POST' }).catch(() => {});
       activePreviewSlug = '';
     }
     
-    // Обновляем Git статус при каждом переходе
     updateGitStatus();
 
-    if (!hash || hash === '#/') {
-      // Режим списка
-      document.getElementById('editView').style.display = 'none';
-      document.getElementById('listView').style.display = 'block';
-      document.getElementById('revertEntryBtn').style.display = 'none';
-      document.getElementById('deleteEntryBtn').style.display = 'none';
-      loadEntries();
-    } 
-    else if (hash === '#/new') {
-      // Режим создания нового поста
-      ORIGINAL_SLUG = '';
-      document.getElementById('listView').style.display = 'none';
-      document.getElementById('editView').style.display = 'block';
-      document.getElementById('revertEntryBtn').style.display = 'none';
-      document.getElementById('deleteEntryBtn').style.display = 'none';
-      document.getElementById('formTitle').innerText = 'Создание нового ДНК-результата';
+    // Скрываем все экраны
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('editView').style.display = 'none';
+    document.getElementById('configView').style.display = 'none';
+
+    if (hash === '#/configuration') {
+      document.getElementById('configView').style.display = 'block';
+      renderSidebar();
+      renderConfigPanel();
+    }
+    else if (hash.startsWith('#/collection/')) {
+      const parts = hash.split('/');
+      const collectionName = parts[2];
       
-      // Заполняем пустые дефолтные значения (дата, шаблон и т.д.)
-      populateForm({
-        date: new Date().toISOString().split('T')[0],
-        template: 'dna-result.html',
-        draft: true,
-        extra: {
-          preview: {
-            mode: 'auto'
-          },
-          details_y: {
-            overview: `| Уровень | SNP | Описание |\n| ------------- | ---------------------------------------------- | ----------------- |\n| Основная | *снип* | Гаплогруппа *снип* |\n| Промежуточный | [*тут нужно вставить снип*](https://www.yfull.com/tree/*снип*/)  | Субклад *снип* |\n| Терминальный | [*тут нужно вставить снип*](https://www.yfull.com/tree/*снип*/) | Терминальный снип |\n\n{{ haplo_path }}`
-          }
-        }
-      });
-    } 
-    else if (hash.startsWith('#/edit/')) {
-      // Режим редактирования
-      const slug = hash.replace('#/edit/', '');
-      ORIGINAL_SLUG = slug;
+      ACTIVE_COLLECTION = collectionName;
+      ACTIVE_COLLECTION_CONFIG = CONFIG.content.find(c => c.name === collectionName);
       
-      document.getElementById('listView').style.display = 'none';
-      document.getElementById('editView').style.display = 'block';
-      document.getElementById('revertEntryBtn').style.display = 'inline-flex';
-      document.getElementById('deleteEntryBtn').style.display = 'inline-flex';
-      document.getElementById('formTitle').innerText = `Редактирование: ${slug}`;
-      
-      showToast('Загрузка данных поста...', 'info');
-      try {
-        const res = await fetch(`/api/entry/${slug}`);
-        if (!res.ok) throw new Error('Не удалось загрузить данные поста');
-        const data = await res.json();
-        
-        // Объединяем frontmatter и content если надо (content у нас обычно пустой)
-        populateForm(data.frontmatter);
-      } catch (error) {
-        showToast(error.message, 'error');
+      if (!ACTIVE_COLLECTION_CONFIG) {
         window.location.hash = '#/';
+        return;
       }
+      
+      renderSidebar();
+
+      if (parts[3] === 'new') {
+        ORIGINAL_SLUG = '';
+        buildForm();
+        document.getElementById('editView').style.display = 'block';
+        document.getElementById('revertEntryBtn').style.display = 'none';
+        document.getElementById('deleteEntryBtn').style.display = 'none';
+        document.getElementById('formTitle').innerText = `Новая запись: ${ACTIVE_COLLECTION_CONFIG.label}`;
+        
+        // Заполняем дефолтные значения
+        const defaults = {
+          date: new Date().toISOString().split('T')[0],
+          draft: true
+        };
+        
+        if (ACTIVE_COLLECTION === 'results') {
+          defaults.template = 'dna-result.html';
+          defaults.extra = {
+            preview: { mode: 'auto' },
+            details_y: {
+              overview: `| Уровень | SNP | Описание |\n| ------------- | ---------------------------------------------- | ----------------- |\n| Основная | *снип* | Гаплогруппа *снип* |\n| Промежуточный | [*тут нужно вставить снип*](https://www.yfull.com/tree/*снип*/)  | Субклад *снип* |\n| Терминальный | [*тут нужно вставить снип*](https://www.yfull.com/tree/*снип*/) | Терминальный снип |\n\n{{ haplo_path }}`
+            }
+          };
+        } else if (ACTIVE_COLLECTION === 'articles') {
+          defaults.template = 'article.html';
+        } else if (ACTIVE_COLLECTION === 'projects' || ACTIVE_COLLECTION === 'pages') {
+          defaults.template = 'page.html';
+        }
+
+        populateForm(defaults);
+      }
+      else if (parts[3] === 'edit') {
+        const slug = parts.slice(4).join('/');
+        ORIGINAL_SLUG = slug;
+        buildForm();
+        
+        document.getElementById('editView').style.display = 'block';
+        document.getElementById('revertEntryBtn').style.display = 'inline-flex';
+        document.getElementById('deleteEntryBtn').style.display = 'inline-flex';
+        document.getElementById('formTitle').innerText = `Редактирование: ${slug}`;
+        
+        showToast('Загрузка данных записи...', 'info');
+        try {
+          const res = await fetch(`/api/collections/${ACTIVE_COLLECTION}/entry/${slug}`);
+          if (!res.ok) throw new Error('Не удалось загрузить данные записи');
+          const data = await res.json();
+          
+          const formData = { ...data.frontmatter };
+          if (data.content) {
+            formData.body = data.content;
+          }
+          populateForm(formData);
+        } catch (error) {
+          showToast(error.message, 'error');
+          window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
+        }
+      }
+      else {
+        buildTableHeader();
+        document.getElementById('listView').style.display = 'block';
+        document.getElementById('listTitle').innerText = ACTIVE_COLLECTION_CONFIG.label;
+        loadEntries();
+      }
+    }
+    else {
+      const defaultCol = CONFIG.content?.[0]?.name || 'results';
+      window.location.hash = `#/collection/${defaultCol}`;
     }
   };
 
   window.addEventListener('hashchange', handleRoute);
   
-  // Авто-чистка при закрытии вкладки браузера
   window.addEventListener('beforeunload', () => {
     if (activePreviewSlug) {
-      navigator.sendBeacon(`/api/entry/${activePreviewSlug}/clear-preview`);
+      navigator.sendBeacon(`/api/collections/${ACTIVE_COLLECTION}/entry/${activePreviewSlug}/clear-preview`);
     }
   });
 
-  // Первоначальный запуск роутера
   handleRoute();
 }
 

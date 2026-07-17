@@ -48,7 +48,7 @@ export function insertMarkdown(textarea, type) {
 }
 
 // Настройка drag & drop и paste (Ctrl+V) для загрузки картинок
-export function setupEditorAttachments(textarea, showToast) {
+export function setupEditorAttachments(textarea, showToast, getCollection) {
   // 1. Обработка вставки Ctrl+V
   textarea.addEventListener('paste', async (e) => {
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -63,7 +63,7 @@ export function setupEditorAttachments(textarea, showToast) {
         try {
           const pathInput = document.querySelector('input[data-field-path="path"]');
           const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
-          const collection = 'results';
+          const collection = typeof getCollection === 'function' ? getCollection() : 'results';
 
           const formData = new FormData();
           formData.append('image', file, 'pasted_image.png');
@@ -118,7 +118,7 @@ export function setupEditorAttachments(textarea, showToast) {
         try {
           const pathInput = document.querySelector('input[data-field-path="path"]');
           const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
-          const collection = 'results';
+          const collection = typeof getCollection === 'function' ? getCollection() : 'results';
 
           const formData = new FormData();
           formData.append('image', file, file.name);

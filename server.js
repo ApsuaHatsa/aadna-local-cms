@@ -61,68 +61,134 @@ app.get('/api/config', async (req, res) => {
     }
     const raw = await fs.readFile(PAGES_CONFIG_PATH, 'utf-8');
     const parsed = yaml.parse(raw);
-    
-    // Находим коллекцию results
-    const resultsCollection = parsed.content?.find(c => c.name === 'results');
-    if (!resultsCollection) {
-      return res.status(404).json({ error: 'Collection "results" not found in config' });
-    }
-
-    res.json(resultsCollection);
+    res.json({ config: parsed, raw });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. GET /api/entries - Список современных результатов
-app.get('/api/entries', async (req, res) => {
+// 1.5 POST /api/config - Запись изменений в .pages.yml
+app.post('/api/config', async (req, res) => {
+  const { raw } = req.body;
+  if (!raw) {
+    return res.status(400).json({ error: 'Raw YAML content is required' });
+  }
+
   try {
-    if (!(await fs.pathExists(RESULTS_DIR))) {
+    // Валидируем YAML синтаксис перед сохранением
+    try {
+      yaml.parse(raw);
+    } catch (parseErr) {
+      return res.status(400).json({ error: `Некорректный синтаксис YAML: ${parseErr.message}` });
+    }
+
+    await fs.writeFile(PAGES_CONFIG_PATH, raw, 'utf-8');
+    
+    // Добавляем изменения в индекс Git
+    runGitCommand('git add .pages.yml');
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Вспомогательная функция для получения настроек конкретной коллекции
+async function getCollectionSettings(collectionName) {
+  if (!(await fs.pathExists(PAGES_CONFIG_PATH))) {
+    throw new Error('Config file .pages.yml not found');
+  }
+  const raw = await fs.readFile(PAGES_CONFIG_PATH, 'utf-8');
+  const parsed = yaml.parse(raw);
+  const collection = parsed.content?.find(c => c.name === collectionName);
+  if (!collection) {
+    throw new Error(`Collection "${collectionName}" not found in config`);
+  }
+  return collection;
+}
+
+// Функция генерации слага для записи
+function getEntrySlug(data, collectionConfig) {
+  const template = collectionConfig.filename?.template || '{path}.md';
+  
+  if (template === '{path}.md' && data.path) {
+    return data.path.replace(/\/+$/, '').trim();
+  }
+  
+  const primaryField = collectionConfig.view?.primary || 'title';
+  const primaryVal = data[primaryField] || '';
+  if (primaryVal) {
+    return slugifyAadnaTitle(primaryVal);
+  }
+  
+  return 'untitled';
+}
+
+// 2. GET /api/collections/:collection/entries - Список записей конкретной коллекции
+app.get('/api/collections/:collection/entries', async (req, res) => {
+  const { collection } = req.params;
+  try {
+    const colSettings = await getCollectionSettings(collection);
+    const colDir = path.join(AADNA_PATH, colSettings.path);
+
+    if (!(await fs.pathExists(colDir))) {
       return res.json([]);
     }
-    const files = await fs.readdir(RESULTS_DIR);
-    const results = [];
+
+    const files = await fs.readdir(colDir);
+    const entries = [];
 
     for (const file of files) {
       if (!file.endsWith('.md') || file.startsWith('_')) continue;
-      
-      const filePath = path.join(RESULTS_DIR, file);
+      if (file.includes('.cms-tmp-preview')) continue;
+
+      const filePath = path.join(colDir, file);
       const raw = await fs.readFile(filePath, 'utf-8');
       const parsed = matter(raw);
 
-      // Исключаем посты legacy_wp (WordPress миграция)
-      if (parsed.data.extra?.content_mode === 'legacy_wp') continue;
+      // Исключаем посты legacy_wp для results
+      if (collection === 'results' && parsed.data.extra?.content_mode === 'legacy_wp') continue;
 
-      results.push({
+      // Формируем базовый объект записи для списка
+      const entry = {
         slug: file.replace('.md', ''),
         title: parsed.data.title || file,
-        surname: parsed.data.extra?.surname || '',
-        haplogroup: parsed.data.extra?.y_haplogroup || '',
-        subclade: parsed.data.extra?.y_subclade || '',
         date: parsed.data.date || '',
         draft: parsed.data.draft ?? false
-      });
+      };
+
+      // Для результатов добавляем фамилию, гаплогруппу, субклад
+      if (collection === 'results') {
+        entry.surname = parsed.data.extra?.surname || '';
+        entry.haplogroup = parsed.data.extra?.y_haplogroup || '';
+        entry.subclade = parsed.data.extra?.y_subclade || '';
+      }
+
+      entries.push(entry);
     }
 
     // Сортировка по дате (свежие сверху)
-    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+    entries.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    res.json(results);
+    res.json(entries);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 3. GET /api/entry/:slug - Чтение конкретного результата
-app.get('/api/entry/:slug', async (req, res) => {
-  const { slug } = req.params;
-  const filePath = path.join(RESULTS_DIR, `${slug}.md`);
-
+// 3. GET /api/collections/:collection/entry/:slug - Чтение конкретной записи
+app.get('/api/collections/:collection/entry/:slug', async (req, res) => {
+  const { collection, slug } = req.params;
   try {
+    const colSettings = await getCollectionSettings(collection);
+    const colDir = path.join(AADNA_PATH, colSettings.path);
+    const filePath = path.join(colDir, `${slug}.md`);
+
     if (!(await fs.pathExists(filePath))) {
-      return res.status(404).json({ error: `Entry ${slug} not found` });
+      return res.status(404).json({ error: `Entry ${slug} not found in collection ${collection}` });
     }
 
     const raw = await fs.readFile(filePath, 'utf-8');
@@ -138,27 +204,28 @@ app.get('/api/entry/:slug', async (req, res) => {
   }
 });
 
-// 4. POST /api/upload - Загрузка файла в корень media или папку поста
+// 4. POST /api/upload - Загрузка изображений (уже переписана под collection)
+// Используем существующий эндпоинт, который принимает query-параметры `slug` и `collection`
 app.post('/api/upload', upload.single('image'), async (req, res) => {
+  const { slug, collection } = req.query;
+  const colName = ['results', 'articles', 'projects', 'pages'].includes(collection) ? collection : 'results';
+
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { slug, collection } = req.query;
-    const colName = collection || 'results';
-
-    if (slug) {
-      // Сохраняем напрямую в папку поста через saveUploadedImage
-      const url = await saveUploadedImage(slug, req.file.originalname, req.file.buffer, colName);
+    // Если slug есть (редактируем пост) - сохраняем сразу в его медиа-папку
+    if (slug && slug !== 'undefined') {
+      const cleanSlug = slug.replace('.cms-tmp-preview', '');
+      const url = await saveUploadedImage(cleanSlug, req.file.originalname, req.file.buffer, colName);
       return res.json({ url });
     }
 
-    // Сохраняем в корень с уникальным именем (таймстамп), чтобы избежать коллизий
-    const safeName = slugifyFilename(req.file.originalname);
-    const ext = path.extname(safeName);
-    const base = path.basename(safeName, ext);
-    const uniqueName = `${base}-${Date.now()}${ext}`;
+    // Если slug нет (создаем новый пост) - сохраняем в корень медиа-папки коллекции с таймстампом
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const base = slugifyFilename(path.basename(req.file.originalname, ext));
+    const uniqueName = `${path.basename(base, ext)}-${Date.now()}${ext}`;
 
     const targetDir = path.join(AADNA_PATH, `static/media/${colName}`);
     const targetPath = path.join(targetDir, uniqueName);
@@ -173,82 +240,102 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// 5. POST /api/entry - Сохранить/создать результат с автоматизациями
-app.post('/api/entry', async (req, res) => {
+// 5. POST /api/collections/:collection/entry - Сохранить/создать запись
+app.post('/api/collections/:collection/entry', async (req, res) => {
+  const { collection } = req.params;
   const { originalSlug, data, isPreview } = req.body;
 
   try {
+    const colSettings = await getCollectionSettings(collection);
+    const colDir = path.join(AADNA_PATH, colSettings.path);
+
     let existingContent = null;
     const cleanOriginalSlug = originalSlug ? originalSlug.replace('.cms-tmp-preview', '') : '';
-    
+
     if (cleanOriginalSlug) {
-      const existingPath = path.join(RESULTS_DIR, `${cleanOriginalSlug}.md`);
+      const existingPath = path.join(colDir, `${cleanOriginalSlug}.md`);
       if (await fs.pathExists(existingPath)) {
         const rawExisting = await fs.readFile(existingPath, 'utf-8');
         existingContent = matter(rawExisting).data;
       }
     }
 
-    // 1 & 2. Нормализация контента, авто-слаг, авто-таксономии и алиасы
-    const { content: normalized, snpToSync } = normalizeAadnaContent(
-      data, 
-      existingContent, 
-      cleanOriginalSlug
-    );
+    let normalized = data;
+    let snpToSync = null;
 
-    const nextSlug = normalized.path.replace(/\/+$/, ''); // убираем слеш на конце для имени файла
+    // Нормализация ДНК результатов (только для results)
+    if (collection === 'results') {
+      const normRes = normalizeAadnaContent(data, existingContent, cleanOriginalSlug);
+      normalized = normRes.content;
+      snpToSync = normRes.snpToSync;
+    }
+
+    // Определение слага
+    const nextSlug = getEntrySlug(normalized, colSettings);
 
     if (isPreview) {
       // Режим предпросмотра: сохраняем во временный файл
       const previewSlug = `${nextSlug}.cms-tmp-preview`;
-      const targetPath = path.join(RESULTS_DIR, `${previewSlug}.md`);
-      
-      // Подменяем путь в самом файле, чтобы у Zola не было конфликтов дубликатов путей
+      const targetPath = path.join(colDir, `${previewSlug}.md`);
+
+      // Подменяем путь в самом файле, чтобы у Zola не было конфликтов дубликатов
       normalized.path = `${nextSlug}-preview/`;
-      
-      // Настраиваем путь к OG-изображению для превью
-      if (normalized.extra) {
-        if (!normalized.extra.preview) normalized.extra.preview = {};
-        normalized.extra.preview.image = `/og/results/${previewSlug}.png`;
+
+      // Генерация OG для превью (только для results)
+      if (collection === 'results') {
+        if (normalized.extra) {
+          if (!normalized.extra.preview) normalized.extra.preview = {};
+          normalized.extra.preview.image = `/og/results/${previewSlug}.png`;
+        }
+        const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
+        await generatePreview(previewSlug, finalContentObj);
+        
+        const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
+        await fs.writeFile(targetPath, fileContent);
+      } else {
+        // Для других коллекций
+        const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, collection);
+        const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
+        await fs.writeFile(targetPath, fileContent);
       }
-
-      // Релокация медиафайлов (для превью используем оригинальный слаг, чтобы не дублировать папки)
-      const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
-      
-      // Генерируем временную OG-картинку
-      await generatePreview(previewSlug, finalContentObj);
-
-      // Сохраняем временный файл
-      const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
-      await fs.writeFile(targetPath, fileContent);
 
       return res.json({ success: true, slug: previewSlug });
     }
 
     // Обычное сохранение/публикация
-    const targetPath = path.join(RESULTS_DIR, `${nextSlug}.md`);
-    const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
+    const targetPath = path.join(colDir, `${nextSlug}.md`);
+    const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, collection);
 
-    if (snpToSync) {
-      await syncSnpPath(snpToSync);
+    if (collection === 'results') {
+      if (snpToSync) {
+        await syncSnpPath(snpToSync);
+      }
+      await generatePreview(nextSlug, finalContentObj);
     }
-
-    await generatePreview(nextSlug, finalContentObj);
 
     const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
     await fs.writeFile(targetPath, fileContent);
 
     // Если имя файла изменилось, удаляем старый файл
     if (cleanOriginalSlug && cleanOriginalSlug !== nextSlug) {
-      const oldPath = path.join(RESULTS_DIR, `${cleanOriginalSlug}.md`);
+      const oldPath = path.join(colDir, `${cleanOriginalSlug}.md`);
       await fs.remove(oldPath);
     }
 
     // Чистим временные файлы предпросмотра
-    const previewFile = path.join(RESULTS_DIR, `${nextSlug}.cms-tmp-preview.md`);
-    const previewImage = path.join(AADNA_PATH, `static/og/results/${nextSlug}.cms-tmp-preview.png`);
+    const previewFile = path.join(colDir, `${nextSlug}.cms-tmp-preview.md`);
     await fs.remove(previewFile);
-    await fs.remove(previewImage);
+
+    if (collection === 'results') {
+      const previewImage = path.join(AADNA_PATH, `static/og/results/${nextSlug}.cms-tmp-preview.png`);
+      await fs.remove(previewImage);
+    }
+
+    // Добавляем файл в индекс Git
+    runGitCommand(`git add ${path.relative(AADNA_PATH, targetPath)}`);
+    if (cleanOriginalSlug && cleanOriginalSlug !== nextSlug) {
+      runGitCommand(`git rm ${path.relative(AADNA_PATH, path.join(colDir, `${cleanOriginalSlug}.md`))}`);
+    }
 
     res.json({ success: true, slug: nextSlug });
   } catch (error) {
@@ -257,38 +344,43 @@ app.post('/api/entry', async (req, res) => {
   }
 });
 
-// 5.5 POST /api/entry/:slug/revert - Откат изменений поста
-app.post('/api/entry/:slug/revert', async (req, res) => {
-  const { slug } = req.params;
-  const filePath = path.join(RESULTS_DIR, `${slug}.md`);
-
+// 5.5 POST /api/collections/:collection/entry/:slug/revert - Откат изменений
+app.post('/api/collections/:collection/entry/:slug/revert', async (req, res) => {
+  const { collection, slug } = req.params;
   try {
+    const colSettings = await getCollectionSettings(collection);
+    const colDir = path.join(AADNA_PATH, colSettings.path);
+    const relativeFilePath = path.join(colSettings.path, `${slug}.md`);
+    const filePath = path.join(colDir, `${slug}.md`);
+
     // Проверяем, отслеживается ли файл в Git
-    const checkRes = runGitCommand(`git ls-files --error-unmatch content/results/${slug}.md`);
+    const checkRes = runGitCommand(`git ls-files --error-unmatch ${relativeFilePath}`);
     if (checkRes.success) {
       // Файл отслеживается, откатываем изменения к HEAD
-      runGitCommand(`git checkout -- content/results/${slug}.md`);
-      runGitCommand(`git checkout -- static/og/results/manifest.json`);
+      runGitCommand(`git checkout -- ${relativeFilePath}`);
       
-      // Картинку OG можно удалить/пересоздать при необходимости, но git restore возвращает файл.
-      // Если файл картинки был создан, но не отслеживается, мы можем удалить его, чтобы не захламлять репозиторий.
-      const ogPath = path.join(AADNA_PATH, `static/og/results/${slug}.png`);
-      if (await fs.pathExists(ogPath)) {
-        const ogCheck = runGitCommand(`git ls-files --error-unmatch static/og/results/${slug}.png`);
-        if (!ogCheck.success) {
-          await fs.remove(ogPath);
+      if (collection === 'results') {
+        runGitCommand(`git checkout -- static/og/results/manifest.json`);
+        const ogPath = path.join(AADNA_PATH, `static/og/results/${slug}.png`);
+        if (await fs.pathExists(ogPath)) {
+          const ogCheck = runGitCommand(`git ls-files --error-unmatch static/og/results/${slug}.png`);
+          if (!ogCheck.success) {
+            await fs.remove(ogPath);
+          }
         }
       }
     } else {
-      // Файл новый (не отслеживается), просто полностью удаляем его
+      // Файл новый (не отслеживается), просто удаляем его
       await fs.remove(filePath);
       
-      // Удаляем также сгенерированную OG-картинку
-      const ogPath = path.join(AADNA_PATH, `static/og/results/${slug}.png`);
-      await fs.remove(ogPath);
+      if (collection === 'results') {
+        const ogPath = path.join(AADNA_PATH, `static/og/results/${slug}.png`);
+        await fs.remove(ogPath);
+      }
       
-      // Удаляем медиа-папку этого рода, если она создалась
-      const mediaFolder = path.join(MEDIA_DIR, slug);
+      // Удаляем медиа-папку этой записи, если она создалась
+      const paths = getMediaPaths(collection);
+      const mediaFolder = path.resolve(paths.input, slug);
       await fs.remove(mediaFolder);
     }
 
@@ -299,17 +391,21 @@ app.post('/api/entry/:slug/revert', async (req, res) => {
   }
 });
 
-// 5.6 POST /api/entry/:slug/clear-preview - Очистка временных файлов предпросмотра
-app.post('/api/entry/:slug/clear-preview', async (req, res) => {
-  const { slug } = req.params;
+// 5.6 POST /api/collections/:collection/entry/:slug/clear-preview - Очистка временных файлов
+app.post('/api/collections/:collection/entry/:slug/clear-preview', async (req, res) => {
+  const { collection, slug } = req.params;
   const cleanSlug = slug.replace('.cms-tmp-preview', '');
   
-  const previewFile = path.join(RESULTS_DIR, `${cleanSlug}.cms-tmp-preview.md`);
-  const previewImage = path.join(AADNA_PATH, `static/og/results/${cleanSlug}.cms-tmp-preview.png`);
-
   try {
+    const colSettings = await getCollectionSettings(collection);
+    const colDir = path.join(AADNA_PATH, colSettings.path);
+    const previewFile = path.join(colDir, `${cleanSlug}.cms-tmp-preview.md`);
     await fs.remove(previewFile);
-    await fs.remove(previewImage);
+
+    if (collection === 'results') {
+      const previewImage = path.join(AADNA_PATH, `static/og/results/${cleanSlug}.cms-tmp-preview.png`);
+      await fs.remove(previewImage);
+    }
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -317,36 +413,47 @@ app.post('/api/entry/:slug/clear-preview', async (req, res) => {
   }
 });
 
-// 5.7 DELETE /api/entry/:slug - Удаление поста
-app.delete('/api/entry/:slug', async (req, res) => {
-  const { slug } = req.params;
+// 5.7 DELETE /api/collections/:collection/entry/:slug - Удаление записи
+app.delete('/api/collections/:collection/entry/:slug', async (req, res) => {
+  const { collection, slug } = req.params;
   const cleanSlug = slug.replace('.cms-tmp-preview', '');
 
   try {
-    const targetPath = path.join(RESULTS_DIR, `${cleanSlug}.md`);
+    const colSettings = await getCollectionSettings(collection);
+    const colDir = path.join(AADNA_PATH, colSettings.path);
+    const targetPath = path.join(colDir, `${cleanSlug}.md`);
 
     if (await fs.pathExists(targetPath)) {
-      // Удаляем сам файл поста
+      // Удаляем сам файл
       await fs.remove(targetPath);
 
-      // Удаляем папку медиа в static/media/results/${cleanSlug}/ если есть
-      const mediaDir = path.join(AADNA_PATH, 'static/media/results', cleanSlug);
+      // Удаляем папку медиа
+      const paths = getMediaPaths(collection);
+      const mediaDir = path.resolve(paths.input, cleanSlug);
       if (await fs.pathExists(mediaDir)) {
         await fs.remove(mediaDir);
       }
 
-      // Удаляем OG-изображение поста
-      const ogImage = path.join(AADNA_PATH, 'static/og/results', `${cleanSlug}.png`);
-      if (await fs.pathExists(ogImage)) {
-        await fs.remove(ogImage);
+      if (collection === 'results') {
+        // Удаляем OG-изображение поста
+        const ogImage = path.join(AADNA_PATH, 'static/og/results', `${cleanSlug}.png`);
+        if (await fs.pathExists(ogImage)) {
+          await fs.remove(ogImage);
+        }
       }
+
+      // Добавляем удаление в Git
+      runGitCommand(`git rm ${path.relative(AADNA_PATH, targetPath)}`);
     }
 
     // Чистим временные файлы предпросмотра
-    const previewFile = path.join(RESULTS_DIR, `${cleanSlug}.cms-tmp-preview.md`);
-    const previewImage = path.join(AADNA_PATH, `static/og/results/${cleanSlug}.cms-tmp-preview.png`);
+    const previewFile = path.join(colDir, `${cleanSlug}.cms-tmp-preview.md`);
     await fs.remove(previewFile);
-    await fs.remove(previewImage);
+
+    if (collection === 'results') {
+      const previewImage = path.join(AADNA_PATH, `static/og/results/${cleanSlug}.cms-tmp-preview.png`);
+      await fs.remove(previewImage);
+    }
 
     // Добавляем изменения в индекс Git
     runGitCommand('git add .');
