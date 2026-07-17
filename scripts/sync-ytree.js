@@ -16,9 +16,9 @@ async function fetchYtreeScreenshot(clade, slug) {
   let treeUrl = '';
 
   for (const theme of themes) {
-    const filename = `ytree_\$\{clade.replace(/[^a-zA-Z0-9-]/g, '')\}_\$\{theme\}.png`;
+    const filename = `ytree_${clade.replace(/[^a-zA-Z0-9-]/g, '')}_${theme}.png`;
     const targetPath = path.join(mediaDir, filename);
-    const url = `https://ytree-api.apsny.dev/api/screenshot?clade=\$\{clade\}\$\{theme === 'dark' ? '&theme=dark' : ''\}`;
+    const url = `https://ytree-api.apsny.dev/api/screenshot?clade=${clade}${theme === 'dark' ? '&theme=dark' : ''}`;
 
     try {
       if (await fs.pathExists(targetPath)) {
@@ -30,13 +30,13 @@ async function fetchYtreeScreenshot(clade, slug) {
         continue;
       }
 
-      console.log(`  - Fetching YTree screenshot (\$\{theme\} theme)...`);
+      console.log(`  - Fetching YTree screenshot (${theme} theme)...`);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
-      if (!response.ok) throw new Error(`HTTP \$\{response.status\}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
@@ -48,10 +48,10 @@ async function fetchYtreeScreenshot(clade, slug) {
 
       const arrayBuffer = await response.arrayBuffer();
       await fs.writeFile(targetPath, Buffer.from(arrayBuffer));
-      console.log(`  - Successfully saved \$\{filename\}`);
+      console.log(`  - Successfully saved ${filename}`);
       successCount++;
     } catch (err) {
-      console.error(`  - Failed to fetch (\$\{theme\}):`, err.message);
+      console.error(`  - Failed to fetch (${theme}):`, err.message);
       return { success: false, link: '' };
     }
   }
@@ -65,14 +65,14 @@ async function main() {
   const resultsDir = path.join(AADNA_PATH, 'content', 'results');
   
   if (!await fs.pathExists(resultsDir)) {
-    console.error(`Directory not found: \${resultsDir}`);
+    console.error(`Directory not found: ${resultsDir}`);
     return;
   }
 
   const files = await fs.readdir(resultsDir);
   const mdFiles = files.filter(f => f.endsWith('.md') && f !== '_index.md');
   
-  console.log(`Found \${mdFiles.length} result posts. Processing...`);
+  console.log(`Found ${mdFiles.length} result posts. Processing...`);
   
   let processed = 0;
   let updated = 0;
@@ -91,40 +91,46 @@ async function main() {
     }
 
     const cladeClean = ySubclade.replace(/[^a-zA-Z0-9-]/g, '');
-    const lightPath = path.join(AADNA_PATH, 'static', 'media', 'results', slug, `ytree_\${cladeClean}_light.png`);
-    const darkPath = path.join(AADNA_PATH, 'static', 'media', 'results', slug, `ytree_\${cladeClean}_dark.png`);
+    const lightPath = path.join(AADNA_PATH, 'static', 'media', 'results', slug, `ytree_${cladeClean}_light.png`);
+    const darkPath = path.join(AADNA_PATH, 'static', 'media', 'results', slug, `ytree_${cladeClean}_dark.png`);
     
     const hasLight = await fs.pathExists(lightPath);
     const hasDark = await fs.pathExists(darkPath);
     
     // Check if the HTML is already injected
-    const hasHtml = parsed.data.extra?.details_y?.ytree_tree?.includes(`ytree_\${cladeClean}_light.png`);
+    const hasHtml = parsed.data.extra?.details_y?.ytree_tree?.includes(`ytree_${cladeClean}_light.png`);
 
     if (hasLight && hasDark && hasHtml) {
       skipped++;
       continue;
     }
 
-    console.log(`[\${processed + 1}/\${mdFiles.length}] Processing \${slug} (clade: \${ySubclade})`);
+    console.log(`[${processed + 1}/${mdFiles.length}] Processing ${slug} (clade: ${ySubclade})`);
     
     // Throttle requests to avoid DDoS on the VPS
     await delay(1500); // 1.5 second delay between processing each post
     
-    const success = await fetchYtreeScreenshot(ySubclade, slug);
+    const fetchRes = await fetchYtreeScreenshot(ySubclade, slug);
     
-    if (success || (hasLight && hasDark)) {
+    if (fetchRes.success || (hasLight && hasDark)) {
       if (!parsed.data.extra.details_y) {
         parsed.data.extra.details_y = {};
       }
       
-      parsed.data.extra.details_y.ytree_tree = 
-        `<img src="/media/results/\${slug}/ytree_\${cladeClean}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg" alt="YTree \${cladeClean}">\\n` +
-        `<img src="/media/results/\${slug}/ytree_\${cladeClean}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg" alt="YTree \${cladeClean}">`;
+      const imgHtml = 
+        `<img src="/media/results/${slug}/ytree_${cladeClean}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${cladeClean}">\n` +
+        `<img src="/media/results/${slug}/ytree_${cladeClean}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${cladeClean}">`;
+        
+      if (fetchRes.link) {
+        parsed.data.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
+      } else {
+        parsed.data.extra.details_y.ytree_tree = imgHtml;
+      }
         
       const fileContent = matter.stringify(parsed.content, parsed.data, { lineWidth: -1 });
       await fs.writeFile(filePath, fileContent);
       updated++;
-      console.log(`  - Updated markdown for \${slug}`);
+      console.log(`  - Updated markdown for ${slug}`);
     } else {
       console.log(`  - Skipping markdown update due to fetch errors`);
     }
@@ -132,7 +138,7 @@ async function main() {
     processed++;
   }
   
-  console.log(`\\nDone! Total files: \${mdFiles.length}, Updated: \${updated}, Skipped/No-op: \${skipped}`);
+  console.log(`\nDone! Total files: ${mdFiles.length}, Updated: ${updated}, Skipped/No-op: ${skipped}`);
 }
 
 main().catch(err => {

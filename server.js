@@ -323,19 +323,25 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       if (clade) {
         // Мы делаем это для предпросмотра (isPreview) и для обычного сохранения,
         // но для предпросмотра слаг должен быть nextSlug
-        const targetSlug = isPreview ? `\${nextSlug}-preview` : nextSlug;
+        const targetSlug = isPreview ? `${nextSlug}-preview` : nextSlug;
         
         // Фоновая загрузка
-        await fetchYtreeScreenshot(normalized.extra.y_subclade, targetSlug);
-        
+        const fetchRes = await fetchYtreeScreenshot(normalized.extra.y_subclade, targetSlug);
+
         if (!normalized.extra.details_y) {
           normalized.extra.details_y = {};
         }
-        
+
         // Вставляем HTML-код с двумя темами
-        normalized.extra.details_y.ytree_tree = 
-          `<img src="/media/results/\${targetSlug}/ytree_\${clade}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg" alt="YTree \${clade}">\n` +
-          `<img src="/media/results/\${targetSlug}/ytree_\${clade}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg" alt="YTree \${clade}">`;
+        const imgHtml =
+          `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">\n` +
+          `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity" alt="YTree ${clade}">`;
+
+        if (fetchRes.link) {
+          normalized.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
+        } else {
+          normalized.extra.details_y.ytree_tree = imgHtml;
+        }
       }
     }
 
