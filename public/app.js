@@ -233,20 +233,35 @@ function buildFormHTML(fields, parentPath = '') {
     let inputControl = '';
     
     if (field.type === 'select') {
-      const isMultiple = field.options?.multiple ? 'multiple' : '';
-      const sizeAttr = field.options?.multiple ? 'size="5"' : '';
       const values = field.options?.values || [];
-      
-      inputControl = `
-        <select data-field-path="${fieldPath}" ${isMultiple} ${sizeAttr}>
-          ${!field.options?.multiple ? '<option value="">-- Выберите --</option>' : ''}
-          ${values.map(val => {
-            const label = typeof val === 'object' ? val.label : val;
-            const value = typeof val === 'object' ? val.value : val;
-            return `<option value="${value}">${label}</option>`;
-          }).join('')}
-        </select>
-      `;
+      if (field.options?.multiple) {
+        inputControl = `
+          <div class="checkbox-grid" data-field-path="${fieldPath}">
+            ${values.map(val => {
+              const label = typeof val === 'object' ? val.label : val;
+              const value = typeof val === 'object' ? val.value : val;
+              const domId = `chk_${fieldPath.replace(/\./g, '_')}_${String(value).replace(/[^a-zA-Z0-9]/g, '_')}`;
+              return `
+                <div class="checkbox-badge">
+                  <input type="checkbox" id="${domId}" value="${value}">
+                  <label for="${domId}">${label}</label>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } else {
+        inputControl = `
+          <select data-field-path="${fieldPath}">
+            <option value="">-- Выберите --</option>
+            ${values.map(val => {
+              const label = typeof val === 'object' ? val.label : val;
+              const value = typeof val === 'object' ? val.value : val;
+              return `<option value="${value}">${label}</option>`;
+            }).join('')}
+          </select>
+        `;
+      }
     } 
     else if (field.type === 'rich-text') {
       inputControl = `
@@ -280,6 +295,13 @@ function buildFormHTML(fields, parentPath = '') {
         </div>
       `;
     } 
+    else if (field.name === 'taxonomies') {
+      inputControl = `
+        <div class="taxonomies-preview" id="taxonomiesPreview" style="display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.25); border-radius: 6px; border: 1px solid var(--color-border); min-height: 40px; align-items: center;">
+          <span style="color: var(--color-muted); font-size: 0.8rem;">Автоматические таксономии будут пересчитаны при сохранении</span>
+        </div>
+      `;
+    }
     else if (field.type === 'date') {
       inputControl = `<input type="date" data-field-path="${fieldPath}">`;
     } 
@@ -604,8 +626,12 @@ function populateForm(data) {
       return;
     }
 
-    const val = getValueByPath(data, path);
+    let val = getValueByPath(data, path);
     if (val === undefined) return;
+
+    if (control.type === 'date' && typeof val === 'string' && val.includes('T')) {
+      val = val.split('T')[0];
+    }
 
     if (control.tagName === 'SELECT') {
       if (control.multiple && Array.isArray(val)) {
@@ -616,6 +642,13 @@ function populateForm(data) {
         control.value = val;
       }
     } 
+    else if (control.classList.contains('checkbox-grid')) {
+      const checkboxes = control.querySelectorAll('input[type="checkbox"]');
+      const valArray = Array.isArray(val) ? val : [val];
+      checkboxes.forEach(chk => {
+        chk.checked = valArray.includes(chk.value);
+      });
+    }
     else if (control.type === 'checkbox') {
       control.checked = !!val;
     } 
@@ -652,6 +685,38 @@ function populateForm(data) {
       });
     }
   });
+
+  // 5. Отображаем бейджи таксономий в превью
+  const taxPreview = document.getElementById('taxonomiesPreview');
+  if (taxPreview) {
+    taxPreview.innerHTML = '';
+    let hasTax = false;
+    
+    // Получаем текущие таксономии из объекта данных
+    const taxonomies = data.taxonomies || {};
+    for (const [key, val] of Object.entries(taxonomies)) {
+      const list = Array.isArray(val) ? val : [val];
+      list.forEach(item => {
+        hasTax = true;
+        const badge = document.createElement('span');
+        badge.style.fontSize = '0.75rem';
+        badge.style.padding = '0.25rem 0.6rem';
+        badge.style.borderRadius = '4px';
+        badge.style.background = 'rgba(0, 229, 192, 0.1)';
+        badge.style.color = '#00E5C0';
+        badge.style.border = '1px solid rgba(0, 229, 192, 0.2)';
+        badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.fontWeight = '500';
+        badge.innerText = `${key}: ${item}`;
+        taxPreview.appendChild(badge);
+      });
+    }
+    
+    if (!hasTax) {
+      taxPreview.innerHTML = '<span style="color: var(--color-muted); font-size: 0.8rem;">Автоматические таксономии будут сгенерированы при сохранении</span>';
+    }
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -676,6 +741,10 @@ function serializeForm() {
         val = control.value;
       }
     } 
+    else if (control.classList.contains('checkbox-grid')) {
+      const checked = Array.from(control.querySelectorAll('input[type="checkbox"]:checked')).map(chk => chk.value);
+      val = checked;
+    }
     else if (control.type === 'checkbox') {
       val = control.checked;
     } 

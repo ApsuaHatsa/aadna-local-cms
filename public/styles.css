@@ -218,6 +218,32 @@ textarea:focus {
   background: rgba(22, 32, 59, 0.9);
 }
 
+select[multiple] {
+  padding: 0.4rem;
+  min-height: 110px;
+}
+
+select[multiple] option {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  margin-bottom: 0.2rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+select[multiple] option:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+select[multiple] option:checked {
+  background: rgba(0, 229, 192, 0.15) !important;
+  color: var(--color-accent) !important;
+  font-weight: 500;
+}
+
 textarea {
   resize: vertical;
   min-height: 80px;
@@ -235,6 +261,54 @@ textarea {
   width: 16px;
   height: 16px;
   accent-color: var(--color-accent);
+}
+
+.checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.checkbox-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(15, 22, 42, 0.6);
+  border: 1px solid var(--color-border);
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.checkbox-badge:hover {
+  border-color: rgba(0, 229, 192, 0.4);
+  background: rgba(22, 32, 59, 0.8);
+  color: white;
+}
+
+.checkbox-badge input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-accent);
+  margin: 0;
+  cursor: pointer;
+}
+
+.checkbox-badge label {
+  cursor: pointer;
+  margin: 0 !important;
+}
+
+.checkbox-badge:has(input[type="checkbox"]:checked) {
+  border-color: var(--color-accent);
+  background: rgba(0, 229, 192, 0.1);
+  color: var(--color-accent);
+  box-shadow: 0 0 10px rgba(0, 229, 192, 0.15);
 }
 
 /* =============================================================================
