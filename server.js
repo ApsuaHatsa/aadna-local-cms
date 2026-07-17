@@ -302,6 +302,47 @@ app.post('/api/entry/:slug/clear-preview', async (req, res) => {
   }
 });
 
+// 5.7 DELETE /api/entry/:slug - Удаление поста
+app.delete('/api/entry/:slug', async (req, res) => {
+  const { slug } = req.params;
+  const cleanSlug = slug.replace('.cms-tmp-preview', '');
+
+  try {
+    const targetPath = path.join(RESULTS_DIR, `${cleanSlug}.md`);
+
+    if (await fs.pathExists(targetPath)) {
+      // Удаляем сам файл поста
+      await fs.remove(targetPath);
+
+      // Удаляем папку медиа в static/media/results/${cleanSlug}/ если есть
+      const mediaDir = path.join(AADNA_PATH, 'static/media/results', cleanSlug);
+      if (await fs.pathExists(mediaDir)) {
+        await fs.remove(mediaDir);
+      }
+
+      // Удаляем OG-изображение поста
+      const ogImage = path.join(AADNA_PATH, 'static/og/results', `${cleanSlug}.png`);
+      if (await fs.pathExists(ogImage)) {
+        await fs.remove(ogImage);
+      }
+    }
+
+    // Чистим временные файлы предпросмотра
+    const previewFile = path.join(RESULTS_DIR, `${cleanSlug}.cms-tmp-preview.md`);
+    const previewImage = path.join(AADNA_PATH, `static/og/results/${cleanSlug}.cms-tmp-preview.png`);
+    await fs.remove(previewFile);
+    await fs.remove(previewImage);
+
+    // Добавляем изменения в индекс Git
+    runGitCommand('git add .');
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 6. GET /api/git-status - Проверка изменений
 app.get('/api/git-status', (req, res) => {
   const status = getStatus();

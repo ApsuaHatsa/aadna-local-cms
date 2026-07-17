@@ -867,6 +867,46 @@ async function saveEntry(actionType = 'draft') {
 // -----------------------------------------------------------------------------
 // Git Publish Modal
 // -----------------------------------------------------------------------------
+function generateCommitMessage(status) {
+  if (!status.success || !status.files || status.files.length === 0) {
+    return '';
+  }
+
+  // 1. Поищем файлы результатов в content/results/
+  const resultFiles = status.files.filter(f => f.file.startsWith('content/results/'));
+
+  if (resultFiles.length === 1) {
+    const file = resultFiles[0];
+    const filename = file.file.split('/').pop().replace(/\.md$/, '');
+    const name = filename.split('_')[0]; // извлекаем фамилию
+
+    if (file.status === 'A' || file.status === '??') {
+      return `add: ${name}`.substring(0, 30);
+    } else if (file.status === 'M') {
+      return `update: ${name}`.substring(0, 30);
+    } else if (file.status === 'D') {
+      return `remove: ${name}`.substring(0, 30);
+    }
+  } else if (resultFiles.length > 1) {
+    const statuses = new Set(resultFiles.map(f => f.status));
+    if (statuses.size === 1) {
+      const statusChar = [...statuses][0];
+      if (statusChar === 'A' || statusChar === '??') return 'add: multiple results';
+      if (statusChar === 'M') return 'update: multiple results';
+      if (statusChar === 'D') return 'remove: multiple results';
+    }
+    return 'update: results';
+  }
+
+  // 2. Если медиа файлы
+  const mediaFiles = status.files.filter(f => f.file.startsWith('static/'));
+  if (mediaFiles.length > 0) {
+    return 'update: media assets';
+  }
+
+  return 'update: website';
+}
+
 async function openPublishModal() {
   const modal = document.getElementById('publishModal');
   const summary = document.getElementById('gitStatusSummary');
@@ -891,6 +931,7 @@ async function openPublishModal() {
     if (status.success) {
       summary.innerText = `Изменено файлов: ${status.totalChanges} (${status.modified} изм., ${status.added + status.untracked} доб., ${status.deleted} уд.)`;
       commitInput.placeholder = `например: add ${ORIGINAL_SLUG || 'new'} post`;
+      commitInput.value = generateCommitMessage(status);
       
       if (status.files && status.files.length > 0) {
         filesList.style.display = 'block';
@@ -1070,12 +1111,28 @@ async function initApp() {
   document.getElementById('revertEntryBtn').addEventListener('click', async () => {
     if (!ORIGINAL_SLUG) return;
     
-    if (confirm('Вы действительно хотите отменить все локальные изменения этого поста и вернуть его к исходному состоянию из Git?')) {
+    if (confirm('Вы действительно хотите хотите отменить все локальные изменения этого поста и вернуть его к исходному состоянию из Git?')) {
       showToast('Откат изменений...', 'info');
       try {
         const res = await fetch(`/api/entry/${ORIGINAL_SLUG}/revert`, { method: 'POST' });
         if (!res.ok) throw new Error('Не удалось откатить изменения');
         showToast('Изменения успешно отменены!', 'success');
+        window.location.hash = '#/';
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+  });
+
+  document.getElementById('deleteEntryBtn').addEventListener('click', async () => {
+    if (!ORIGINAL_SLUG) return;
+
+    if (confirm('Вы уверены, что хотите навсегда удалить этот результат, всю связанную с ним медиа-папку и изображения превью?')) {
+      showToast('Удаление поста...', 'info');
+      try {
+        const res = await fetch(`/api/entry/${ORIGINAL_SLUG}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Не удалось удалить пост');
+        showToast('Пост успешно удален!', 'success');
         window.location.hash = '#/';
       } catch (err) {
         showToast(err.message, 'error');
@@ -1118,6 +1175,7 @@ async function initApp() {
       document.getElementById('editView').style.display = 'none';
       document.getElementById('listView').style.display = 'block';
       document.getElementById('revertEntryBtn').style.display = 'none';
+      document.getElementById('deleteEntryBtn').style.display = 'none';
       loadEntries();
     } 
     else if (hash === '#/new') {
@@ -1126,6 +1184,7 @@ async function initApp() {
       document.getElementById('listView').style.display = 'none';
       document.getElementById('editView').style.display = 'block';
       document.getElementById('revertEntryBtn').style.display = 'none';
+      document.getElementById('deleteEntryBtn').style.display = 'none';
       document.getElementById('formTitle').innerText = 'Создание нового ДНК-результата';
       
       // Заполняем пустые дефолтные значения (дата, шаблон и т.д.)
@@ -1151,6 +1210,7 @@ async function initApp() {
       document.getElementById('listView').style.display = 'none';
       document.getElementById('editView').style.display = 'block';
       document.getElementById('revertEntryBtn').style.display = 'inline-flex';
+      document.getElementById('deleteEntryBtn').style.display = 'inline-flex';
       document.getElementById('formTitle').innerText = `Редактирование: ${slug}`;
       
       showToast('Загрузка данных поста...', 'info');
