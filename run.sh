@@ -95,9 +95,8 @@ else
 fi
 
 echo "[→] Запускаю сервер админки на порту 4400..."
-if command -v xdg-open &>/dev/null; then
-  xdg-open http://localhost:4400 >/dev/null 2>&1 &
-elif command -v open &>/dev/null; then
-  open http://localhost:4400 >/dev/null 2>&1 &
-fi
+echo "======================================================="
+echo "✅ Готово! Админка доступна по адресу:"
+echo "   http://localhost:4400"
+echo "======================================================="
 node server.js
