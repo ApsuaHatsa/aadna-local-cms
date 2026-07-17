@@ -795,12 +795,16 @@ async function openPublishModal() {
   const commitInput = document.getElementById('commitMessageInput');
   const consoleLog = document.getElementById('modalConsole');
   const filesList = document.getElementById('gitFilesList');
+  const diffContainer = document.getElementById('gitDiffContainer');
+  const diffContent = document.getElementById('gitDiffContent');
   
   commitInput.value = '';
   consoleLog.style.display = 'none';
   consoleLog.innerText = '';
   filesList.innerHTML = '';
   filesList.style.display = 'none';
+  diffContainer.style.display = 'none';
+  diffContent.innerHTML = '';
   
   try {
     const res = await fetch('/api/git-status');
@@ -839,6 +843,17 @@ async function openPublishModal() {
           `;
           filesList.appendChild(item);
         });
+
+        // Запрашиваем и рендерим текстовый diff
+        try {
+          const diffRes = await fetch('/api/git-diff');
+          const diffData = await diffRes.json();
+          if (diffData.success && diffData.diff) {
+            renderDiffText(diffData.diff);
+          }
+        } catch (err) {
+          console.error('Ошибка загрузки diff:', err);
+        }
       }
     }
   } catch (e) {
@@ -846,6 +861,39 @@ async function openPublishModal() {
   }
   
   modal.classList.add('active');
+}
+
+function renderDiffText(diffText) {
+  const diffContent = document.getElementById('gitDiffContent');
+  const diffContainer = document.getElementById('gitDiffContainer');
+  
+  if (!diffText || diffText.trim() === '') {
+    diffContent.innerHTML = '<span style="color: var(--color-muted);">Нет текстовых изменений (возможно, изменены только бинарные файлы).</span>';
+    diffContainer.style.display = 'block';
+    return;
+  }
+  
+  const lines = diffText.split('\n');
+  const htmlLines = lines.map(line => {
+    const safeLine = line
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+      
+    if (safeLine.startsWith('+') && !safeLine.startsWith('+++')) {
+      return `<span style="color: #10B981;">${safeLine}</span>`; // Зеленый для добавлений
+    } else if (safeLine.startsWith('-') && !safeLine.startsWith('---')) {
+      return `<span style="color: #EF4444;">${safeLine}</span>`; // Красный для удалений
+    } else if (safeLine.startsWith('@@')) {
+      return `<span style="color: #6366F1;">${safeLine}</span>`; // Синий для хуков
+    } else if (safeLine.startsWith('diff ') || safeLine.startsWith('index ')) {
+      return `<span style="color: #FFF; font-weight: bold;">${safeLine}</span>`; // Белый для метаданных
+    }
+    return safeLine;
+  });
+  
+  diffContent.innerHTML = htmlLines.join('\n');
+  diffContainer.style.display = 'block';
 }
 
 function closePublishModal() {
@@ -946,6 +994,18 @@ async function initApp() {
   document.getElementById('gitStatusBar').addEventListener('click', openPublishModal);
   document.getElementById('closePublishModalBtn').addEventListener('click', closePublishModal);
   document.getElementById('startCommitBtn').addEventListener('click', startGitPublish);
+  
+  document.getElementById('toggleDiffBtn').addEventListener('click', () => {
+    const diffContent = document.getElementById('gitDiffContent');
+    const toggleBtn = document.getElementById('toggleDiffBtn');
+    if (diffContent.style.display === 'none') {
+      diffContent.style.display = 'block';
+      toggleBtn.innerText = 'Свернуть';
+    } else {
+      diffContent.style.display = 'none';
+      toggleBtn.innerText = 'Развернуть';
+    }
+  });
 
   // 3. Маршрутизатор (Router)
   const handleRoute = async () => {

@@ -100,7 +100,16 @@
       </div>
       
       <!-- Список измененных файлов -->
-      <div id="gitFilesList" style="max-height: 150px; overflow-y: auto; margin-bottom: 1.5rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; border: 1px solid var(--color-border); display: none;">
+      <div id="gitFilesList" style="max-height: 120px; overflow-y: auto; margin-bottom: 1rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; border: 1px solid var(--border-color); display: none;">
+      </div>
+      
+      <!-- Содержимое Diff -->
+      <div id="gitDiffContainer" style="display: none; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <label style="margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--color-muted);">Изменения в коде (Diff):</label>
+          <button type="button" class="btn btn-sm" id="toggleDiffBtn" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; background: rgba(255,255,255,0.05);">Свернуть</button>
+        </div>
+        <pre id="gitDiffContent" style="max-height: 250px; overflow: auto; background: #020617; border: 1px solid var(--color-border); border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.75rem; line-height: 1.4; white-space: pre; text-align: left;"></pre>
       </div>
 
       <div class="form-group" style="margin-bottom: 1.5rem;">

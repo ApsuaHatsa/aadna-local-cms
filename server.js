@@ -13,7 +13,7 @@ import { normalizeAadnaContent } from './lib/normalize.js';
 import { saveUploadedImage, relocateAadnaResultMedia } from './lib/media.js';
 import { syncSnpPath } from './lib/snp.js';
 import { generatePreview } from './lib/preview.js';
-import { getStatus, publish } from './lib/git.js';
+import { getStatus, publish, runGitCommand } from './lib/git.js';
 import { slugifyAadnaTitle } from './lib/slugify.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -214,6 +214,18 @@ app.post('/api/entry', async (req, res) => {
 app.get('/api/git-status', (req, res) => {
   const status = getStatus();
   res.json(status);
+});
+
+// 6.5 GET /api/git-diff - Получение текстового diff
+app.get('/api/git-diff', (req, res) => {
+  const diffRes = runGitCommand('git diff HEAD');
+  if (diffRes.success) {
+    res.json({ success: true, diff: diffRes.stdout });
+  } else {
+    // Резервный вариант, если HEAD еще нет (первый коммит)
+    const diffRes2 = runGitCommand('git diff');
+    res.json({ success: diffRes2.success, diff: diffRes2.stdout, error: diffRes2.stderr });
+  }
 });
 
 // 7. POST /api/publish - Коммит и отправка изменений в Git
