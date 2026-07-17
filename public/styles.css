@@ -214,7 +214,7 @@ input[type="number"]:focus,
 select:focus,
 textarea:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 10px rgba(0, 229, 192, 0.15);
+  box-shadow: 0 0 15px rgba(0, 229, 192, 0.25), inset 0 0 8px rgba(0, 229, 192, 0.05);
   background: rgba(22, 32, 59, 0.9);
 }
 
@@ -643,4 +643,25 @@ table.entries-table tr:hover td {
 
 .toast.error {
   border-left: 4px solid var(--color-danger);
+}
+
+/* Custom Premium Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #070B19;
+  border-left: 1px solid var(--color-border);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-indigo) 0%, var(--color-accent) 100%);
+  border-radius: 999px;
+  border: 2px solid #070B19;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
 }

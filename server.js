@@ -241,17 +241,30 @@ app.post('/api/publish', (req, res) => {
 });
 
 // Запуск сервера
-app.listen(PORT, () => {
-  console.log(`\n==================================================`);
-  console.log(`🧬 AADNA Local Admin running at: http://localhost:${PORT}`);
-  console.log(`Working with repository: ${AADNA_PATH}`);
-  console.log(`==================================================\n`);
-  
-  // Авто-открытие браузера
-  try {
-    const startCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-    execSync(`${startCmd} http://localhost:${PORT}`);
-  } catch (e) {
-    // Игнорируем ошибки авто-открытия
-  }
-});
+function startServer(port) {
+  const server = app.listen(port, () => {
+    console.log(`\n==================================================`);
+    console.log(`🧬 AADNA Local Admin running at: http://localhost:${port}`);
+    console.log(`Working with repository: ${AADNA_PATH}`);
+    console.log(`==================================================\n`);
+    
+    // Авто-открытие браузера
+    try {
+      const startCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      execSync(`${startCmd} http://localhost:${port}`);
+    } catch (e) {
+      // Игнорируем ошибки авто-открытия
+    }
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Порт ${port} занят. Пробуем запустить на порту ${port + 1}...`);
+      startServer(port + 1);
+    } else {
+      console.error('Ошибка при запуске сервера:', err);
+    }
+  });
+}
+
+startServer(PORT);
