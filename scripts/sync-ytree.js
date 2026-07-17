@@ -132,7 +132,15 @@ async function main() {
       updated++;
       console.log(`  - Updated markdown for ${slug}`);
     } else {
-      console.log(`  - Skipping markdown update due to fetch errors`);
+      if (parsed.data.extra?.details_y?.ytree_tree) {
+        delete parsed.data.extra.details_y.ytree_tree;
+        const fileContent = matter.stringify(parsed.content, parsed.data, { lineWidth: -1 });
+        await fs.writeFile(filePath, fileContent);
+        updated++;
+        console.log(`  - Cleaned up broken ytree_tree for ${slug}`);
+      } else {
+        console.log(`  - Skipping markdown update due to fetch errors`);
+      }
     }
     
     processed++;
