@@ -320,41 +320,41 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
 
     // Автоматическая генерация скриншотов YTree
     if (collection === 'results') {
-      const customClade = normalized.extra?.details_y?.ytree_clade;
-      const defaultClade = normalized.extra?.y_subclade;
-      const targetClade = (customClade && customClade.trim()) ? customClade.trim() : defaultClade;
+      try {
+        const customClade = normalized.extra?.details_y?.ytree_clade;
+        const defaultClade = normalized.extra?.y_subclade;
+        const targetClade = (customClade && customClade.trim()) ? customClade.trim() : defaultClade;
 
-      if (targetClade) {
-        const clade = targetClade.replace(/[^a-zA-Z0-9-]/g, '');
-        if (clade) {
-          // Мы делаем это для предпросмотра (isPreview) и для обычного сохранения,
-          // но для предпросмотра слаг должен быть nextSlug
-          const targetSlug = isPreview ? `${nextSlug}-preview` : nextSlug;
+        if (targetClade) {
+          const clade = targetClade.replace(/[^a-zA-Z0-9-]/g, '');
+          if (clade) {
+            const targetSlug = isPreview ? `${nextSlug}-preview` : nextSlug;
 
-          // Фоновая загрузка
-          const fetchRes = await fetchYtreeScreenshot(targetClade, targetSlug);
+            const fetchRes = await fetchYtreeScreenshot(targetClade, targetSlug);
 
-          if (fetchRes.success) {
-            if (!normalized.extra.details_y) {
-              normalized.extra.details_y = {};
+            if (fetchRes.success) {
+              if (!normalized.extra.details_y) {
+                normalized.extra.details_y = {};
+              }
+
+              const imgHtml =
+                `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="no-zoom ytree-img-light block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${clade}">\n` +
+                `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="no-zoom ytree-img-dark hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${clade}">`;
+
+              if (fetchRes.link) {
+                normalized.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
+              } else {
+                normalized.extra.details_y.ytree_tree = imgHtml;
+              }
+            } else if (normalized.extra.details_y && normalized.extra.details_y.ytree_tree) {
+              delete normalized.extra.details_y.ytree_tree;
             }
-
-            // Вставляем HTML-код с двумя темами
-            const imgHtml =
-              `<img src="/media/results/${targetSlug}/ytree_${clade}_light.png" class="no-zoom block dark:hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${clade}">\n` +
-              `<img src="/media/results/${targetSlug}/ytree_${clade}_dark.png" class="no-zoom hidden dark:block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${clade}">`;
-
-            if (fetchRes.link) {
-              normalized.extra.details_y.ytree_tree = `<a href="${fetchRes.link}" target="_blank" rel="noopener noreferrer" class="block">\n${imgHtml}\n</a>`;
-            } else {
-              normalized.extra.details_y.ytree_tree = imgHtml;
-            }
-          } else if (normalized.extra.details_y && normalized.extra.details_y.ytree_tree) {
-            delete normalized.extra.details_y.ytree_tree;
           }
+        } else if (normalized.extra?.details_y && normalized.extra.details_y.ytree_tree) {
+          delete normalized.extra.details_y.ytree_tree;
         }
-      } else if (normalized.extra?.details_y && normalized.extra.details_y.ytree_tree) {
-        delete normalized.extra.details_y.ytree_tree;
+      } catch (ytreeErr) {
+        console.error('YTree screenshot error (non-fatal):', ytreeErr.message);
       }
     }
 

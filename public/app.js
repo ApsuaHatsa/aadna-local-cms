@@ -1218,6 +1218,12 @@ async function initApp() {
   document.getElementById('saveAndPublishBtn').addEventListener('click', () => saveEntry('publish'));
   
   document.getElementById('previewBtn').addEventListener('click', async () => {
+    // Открываем вкладку сразу (синхронно), чтобы обойти блокировщик всплывающих окон
+    const previewWindow = window.open('about:blank', '_blank');
+    if (previewWindow) {
+      previewWindow.document.write('<html><head><title>Генерация предпросмотра...</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#e2e8f0;margin:0;"><div style="text-align:center;"><div style="font-size:24px;font-weight:bold;margin-bottom:10px;">Генерация предпросмотра...</div><div style="opacity:0.6;">Пожалуйста, подождите. Страница загрузится автоматически.</div></div></body></html>');
+    }
+
     const previewSlug = await saveEntry('preview');
     if (previewSlug) {
       const cleanSlug = previewSlug.replace('.cms-tmp-preview', '');
@@ -1226,10 +1232,17 @@ async function initApp() {
       const basePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : cleanSlug;
       
       // Задержка 2 сек, чтобы Zola успел пересобрать страницу
-      showToast('Генерация предпросмотра... Страница откроется автоматически', 'info');
       setTimeout(() => {
-        window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
+        if (previewWindow) {
+          previewWindow.location.href = `http://localhost:1111/${basePath}-preview/`;
+        } else {
+          window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
+        }
       }, 2000);
+    } else {
+      if (previewWindow) {
+        previewWindow.close();
+      }
     }
   });
 
