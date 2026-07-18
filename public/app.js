@@ -743,6 +743,20 @@ function populateForm(data) {
     const path = container.getAttribute('data-field-path');
     const val = getValueByPath(data, path) || '';
     
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.backgroundImage = 'none';
+    button.style.backgroundColor = 'transparent';
+    button.style.border = 'none';
+    button.style.color = '#e2e8f0';
+    button.style.fontSize = '12px';
+    button.style.fontWeight = '600';
+    button.style.cursor = 'pointer';
+    button.style.display = 'flex';
+    button.style.alignItems = 'center';
+    button.style.padding = '0 5px';
+    button.innerHTML = '<span style="color:#ef4444;margin-right:3px;">▶</span> YT';
+
     const editor = new toastui.Editor({
       el: container,
       initialEditType: 'wysiwyg',
@@ -751,6 +765,20 @@ function populateForm(data) {
       initialValue: val,
       theme: 'dark',
       language: 'ru-RU',
+      toolbarItems: [
+        ['heading', 'bold', 'italic', 'strike'],
+        ['hr', 'quote'],
+        ['ul', 'ol', 'task', 'indent', 'outdent'],
+        ['table', 'image', 'link'],
+        ['code', 'codeblock'],
+        [
+          {
+            name: 'youtube',
+            tooltip: 'Вставить YouTube видео',
+            el: button
+          }
+        ]
+      ],
       hooks: {
         addImageBlobHook: async (blob, callback) => {
           showToast('Загрузка изображения...', 'info');
@@ -773,6 +801,17 @@ function populateForm(data) {
             callback('', 'Ошибка загрузки');
           }
         }
+      }
+    });
+
+    button.addEventListener('click', () => {
+      const url = prompt('Введите ссылку на YouTube видео (например, https://www.youtube.com/watch?v=dQw4w9WgXcQ):');
+      if (!url) return;
+      const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+      if (match && match[1]) {
+        editor.insertText(`{{ youtube(id="${match[1]}") }}`);
+      } else {
+        alert('Не удалось извлечь ID видео из ссылки. Пожалуйста, проверьте корректность ссылки.');
       }
     });
     window.activeEditors[path] = editor;
