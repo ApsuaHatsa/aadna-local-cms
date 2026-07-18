@@ -809,7 +809,30 @@ function populateForm(data) {
       if (!url) return;
       const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
       if (match && match[1]) {
-        editor.insertText(`{{ youtube(id="${match[1]}") }}`);
+        const videoId = match[1];
+        const timeMatch = url.match(/[?&]t=([^&]+)/);
+        let start = '';
+        if (timeMatch) {
+          const timeStr = timeMatch[1];
+          if (/^\d+$/.test(timeStr)) {
+            start = timeStr;
+          } else {
+            const h = timeStr.match(/(\d+)h/);
+            const m = timeStr.match(/(\d+)m/);
+            const s = timeStr.match(/(\d+)s/);
+            let seconds = 0;
+            if (h) seconds += parseInt(h[1], 10) * 3600;
+            if (m) seconds += parseInt(m[1], 10) * 60;
+            if (s) seconds += parseInt(s[1], 10);
+            if (seconds > 0) start = String(seconds);
+          }
+        }
+
+        if (start) {
+          editor.insertText(`{{ youtube(id="${videoId}", start=${start}) }}`);
+        } else {
+          editor.insertText(`{{ youtube(id="${videoId}") }}`);
+        }
       } else {
         alert('Не удалось извлечь ID видео из ссылки. Пожалуйста, проверьте корректность ссылки.');
       }
