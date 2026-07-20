@@ -349,6 +349,7 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
                   u.searchParams.set('utm_source', 'aadna.ru');
                   u.searchParams.set('utm_medium', '/' + nextSlug);
                   u.searchParams.set('utm_campaign', 'aadna_referrals');
+                  u.searchParams.set('utm_content', clade);
                   finalLink = u.toString();
                 } catch (e) {
                   // Fallback

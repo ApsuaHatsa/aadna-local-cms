@@ -158,6 +158,7 @@ async function main() {
           u.searchParams.set('utm_source', 'aadna.ru');
           u.searchParams.set('utm_medium', '/' + slug);
           u.searchParams.set('utm_campaign', 'aadna_referrals');
+          u.searchParams.set('utm_content', cladeClean);
           finalLink = u.toString();
         } catch (e) {
           // Fallback
