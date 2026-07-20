@@ -150,19 +150,17 @@ async function main() {
         `<img src="/media/results/${slug}/ytree_${cladeClean}_light.png" class="no-zoom ytree-img-light block w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${cladeClean}">\n` +
         `<img src="/media/results/${slug}/ytree_${cladeClean}_dark.png" class="no-zoom ytree-img-dark hidden w-full rounded-lg shadow-lg hover:opacity-90 transition-opacity cursor-pointer" alt="YTree ${cladeClean}">`;
         
-      let finalLink = fetchRes.link;
-      if (finalLink) {
-        try {
-          const u = new URL(finalLink);
-          u.search = '';
-          u.searchParams.set('utm_source', 'aadna.ru');
-          u.searchParams.set('utm_medium', '/' + slug);
-          u.searchParams.set('utm_campaign', 'aadna_referrals');
-          u.searchParams.set('utm_content', cladeClean);
-          finalLink = u.toString();
-        } catch (e) {
-          // Fallback
-        }
+      let finalLink = fetchRes.link || `https://ytree.apsny.dev/${cladeClean}`;
+      try {
+        const u = new URL(finalLink);
+        u.search = '';
+        u.searchParams.set('utm_source', 'aadna.ru');
+        u.searchParams.set('utm_medium', '/' + slug);
+        u.searchParams.set('utm_campaign', 'aadna_referrals');
+        u.searchParams.set('utm_content', cladeClean);
+        finalLink = u.toString();
+      } catch (e) {
+        // Fallback
       }
 
       if (finalLink) {
