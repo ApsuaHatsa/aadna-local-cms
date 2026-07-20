@@ -186,10 +186,37 @@
     </div>
   </div>
 
+  <!-- Модальное окно вставки HTML кода -->
+  <div class="modal-overlay" id="htmlImportModal">
+    <div class="modal-content" style="max-width: 750px; width: 90%;">
+      <h3 class="modal-title">🌐 Вставить HTML код в пост</h3>
+      <p style="font-size: 0.85rem; color: var(--color-muted); margin-bottom: 1rem; line-height: 1.4;">
+        Вставьте любой HTML код (из WordPress, шаблонов или текстовых файлов). Код будет автоматически очищен от служебных оберток (DOCTYPE, body, head), разиндентирован для предотвращения конфликтов с Markdown и адаптирован под тёмную/светлую темы сайта.
+      </p>
+
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label for="htmlImportTextarea">Код HTML<span class="required">*</span></label>
+        <textarea id="htmlImportTextarea" spellcheck="false" rows="12" placeholder="Вставьте HTML код со стилями <style> и блоками <div>..." style="font-family: monospace; font-size: 0.82rem; line-height: 1.4; background: #020617; color: #f8fafc; border-color: var(--color-border); resize: vertical; width: 100%;"></textarea>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; color: #e2e8f0; user-select: none;">
+          <input type="checkbox" id="htmlAutoAdaptTheme" checked style="accent-color: var(--color-accent); width: 16px; height: 16px;">
+          <span>Автоматически добавить адаптивность к тёмной/светлой теме и исправить тире</span>
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button type="button" class="btn" id="closeHtmlImportModalBtn">Отмена</button>
+        <button type="button" class="btn btn-primary" id="confirmHtmlImportBtn">✨ Очистить и вставить в пост</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Контейнер для всплывающих уведомлений -->
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Подключение JS -->
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>

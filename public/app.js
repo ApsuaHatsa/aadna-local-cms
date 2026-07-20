@@ -413,10 +413,19 @@ function buildFormHTML(fields, parentPath = '') {
 
     const fullWidthClass = (field.type === 'rich-text' || field.type === 'text') ? 'full-width' : '';
     const showLabel = field.type !== 'boolean';
+    const canImportHtml = field.type === 'rich-text' || field.type === 'text' || field.name === 'history' || field.name === 'overview' || field.name === 'details_y';
+    const htmlBtn = canImportHtml ? `
+      <button type="button" class="btn btn-sm open-html-import-btn" data-field-path="${fieldPath}" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; background: rgba(0,229,192,0.1); color: var(--color-accent); border: 1px solid rgba(0,229,192,0.3); border-radius: 4px; font-weight: 600;">
+        🌐 Вставить HTML
+      </button>
+    ` : '';
     
     html += `
       <div class="form-group ${fullWidthClass}">
-        ${showLabel ? `<label>${field.label}${isRequired}</label>` : ''}
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem;">
+          ${showLabel ? `<label style="margin: 0;">${field.label}${isRequired}</label>` : '<div></div>'}
+          ${htmlBtn}
+        </div>
         ${inputControl}
         ${descHTML}
       </div>
@@ -488,6 +497,15 @@ function initializeFormEvents() {
           });
         }
       }
+    });
+  });
+
+  // Навешиваем обработчики для кнопок вставки HTML
+  document.querySelectorAll('.open-html-import-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fieldPath = btn.getAttribute('data-field-path');
+      openHtmlImportModal(fieldPath);
     });
   });
 
@@ -757,6 +775,20 @@ function populateForm(data) {
     button.style.padding = '0 5px';
     button.innerHTML = '<span style="color:#ef4444;margin-right:3px;">▶</span> YT';
 
+    const htmlButton = document.createElement('button');
+    htmlButton.type = 'button';
+    htmlButton.style.backgroundImage = 'none';
+    htmlButton.style.backgroundColor = 'transparent';
+    htmlButton.style.border = 'none';
+    htmlButton.style.color = '#00E5C0';
+    htmlButton.style.fontSize = '12px';
+    htmlButton.style.fontWeight = '700';
+    htmlButton.style.cursor = 'pointer';
+    htmlButton.style.display = 'flex';
+    htmlButton.style.alignItems = 'center';
+    htmlButton.style.padding = '0 5px';
+    htmlButton.innerHTML = '<span style="color:#00E5C0;margin-right:3px;">🌐</span> HTML';
+
     const editor = new toastui.Editor({
       el: container,
       initialEditType: 'wysiwyg',
@@ -776,6 +808,11 @@ function populateForm(data) {
             name: 'youtube',
             tooltip: 'Вставить YouTube видео',
             el: button
+          },
+          {
+            name: 'htmlImport',
+            tooltip: 'Вставить HTML код (авто-очистка для aadna)',
+            el: htmlButton
           }
         ]
       ],
@@ -837,6 +874,11 @@ function populateForm(data) {
         alert('Не удалось извлечь ID видео из ссылки. Пожалуйста, проверьте корректность ссылки.');
       }
     });
+
+    htmlButton.addEventListener('click', () => {
+      openHtmlImportModal(path);
+    });
+
     window.activeEditors[path] = editor;
   });
 
@@ -1501,7 +1543,155 @@ async function initApp() {
     }
   });
 
+  setupHtmlImportModalListeners();
   handleRoute();
+}
+
+// -----------------------------------------------------------------------------
+// 🌐 Очистка и санитизация HTML для aadna.ru (Идеальное встраивание)
+// -----------------------------------------------------------------------------
+let activeHtmlImportFieldPath = null;
+
+function sanitizeHtmlForAadna(rawHtml, adaptTheme = true) {
+  if (!rawHtml || typeof rawHtml !== 'string') return '';
+  let html = rawHtml;
+
+  // 1. Извлекаем содержимое <body> если вставлен весь HTML документ
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) {
+    html = bodyMatch[1];
+  } else {
+    // Удаляем служебные теги документа
+    html = html
+      .replace(/<!DOCTYPE[^>]*>/gi, '')
+      .replace(/<html[^>]*>/gi, '')
+      .replace(/<\/html>/gi, '')
+      .replace(/<head[\s\S]*?<\/head>/gi, '')
+      .replace(/<meta[^>]*>/gi, '')
+      .replace(/<title[\s\S]*?<\/title>/gi, '')
+      .replace(/<body[^>]*>/gi, '')
+      .replace(/<\/body>/gi, '');
+  }
+
+  // 2. Удаляем служебные комментарии (например, из WordPress)
+  html = html.replace(/<!--[\s\S]*?-->/g, '');
+
+  // 3. Заменяем тире (правило API / GEMINI.md: никаких длинных тире)
+  html = html.replace(/[—–]/g, '-');
+
+  // 4. Очищаем <br> внутри заголовков
+  html = html.replace(/<(h[1-6])>\s*<br\s*\/?>/gi, '<$1>');
+
+  // 5. Адаптация CSS стилей под темы (Dark/Light Mode)
+  if (adaptTheme) {
+    if (html.includes('.jir-history-wrapper')) {
+      if (!html.includes('[data-theme="dark"]')) {
+        const themeVariables = `
+    [data-theme="dark"] .jir-history-wrapper {
+        --jir-bg: rgba(255, 255, 255, 0.03);
+        --jir-border: rgba(255, 255, 255, 0.12);
+        --jir-text: #e2e8f0;
+        --jir-title: #f1f5f9;
+        --jir-places-bg: rgba(255, 255, 255, 0.05);
+        --jir-lineage-bg: rgba(255, 255, 255, 0.04);
+        --jir-lineage-border: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    [data-theme="light"] .jir-history-wrapper {
+        --jir-bg: #fcfbfa;
+        --jir-border: #eaddc5;
+        --jir-text: #3b332c;
+        --jir-title: #2c241b;
+        --jir-places-bg: #ffffff;
+        --jir-lineage-bg: #f4eee6;
+        --jir-lineage-border: #d1c0a8;
+    }
+`;
+        html = html.replace(/(\.jir-history-wrapper\s*\{)/, `${themeVariables}\n    $1`);
+      }
+
+      html = html
+        .replace(/background-color:\s*#fcfbfa;/gi, 'background-color: var(--jir-bg, #fcfbfa);')
+        .replace(/border:\s*1px solid #eaddc5;/gi, 'border: 1px solid var(--jir-border, #eaddc5);')
+        .replace(/color:\s*#3b332c;/gi, 'color: var(--jir-text, #3b332c);')
+        .replace(/color:\s*#2c241b;/gi, 'color: var(--jir-title, #2c241b);')
+        .replace(/background-color:\s*#ffffff;/gi, 'background-color: var(--jir-places-bg, #ffffff);')
+        .replace(/background-color:\s*#f4eee6;/gi, 'background-color: var(--jir-lineage-bg, #f4eee6);')
+        .replace(/border:\s*1px dashed #d1c0a8;/gi, 'border: 1px dashed var(--jir-lineage-border, #d1c0a8);');
+    }
+  }
+
+  // 6. Снимаем 4+ пробельные отступы перед тегами, чтобы Markdown не делал <pre><code>
+  const lines = html.split(/\r?\n/);
+  const unindented = lines.map(line => {
+    if (/^\s+</.test(line)) {
+      return line.replace(/^\s+/, '');
+    }
+    return line;
+  });
+
+  return unindented.join('\n').trim();
+}
+
+function openHtmlImportModal(fieldPath) {
+  activeHtmlImportFieldPath = fieldPath;
+  const modal = document.getElementById('htmlImportModal');
+  const textarea = document.getElementById('htmlImportTextarea');
+  if (textarea) textarea.value = '';
+  if (modal) modal.classList.add('active');
+}
+
+function closeHtmlImportModal() {
+  const modal = document.getElementById('htmlImportModal');
+  if (modal) modal.classList.remove('active');
+  activeHtmlImportFieldPath = null;
+}
+
+function setupHtmlImportModalListeners() {
+  const closeBtn = document.getElementById('closeHtmlImportModalBtn');
+  const confirmBtn = document.getElementById('confirmHtmlImportBtn');
+  const modal = document.getElementById('htmlImportModal');
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeHtmlImportModal);
+  }
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeHtmlImportModal();
+    });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => {
+      const rawHtml = document.getElementById('htmlImportTextarea')?.value || '';
+      const adaptTheme = document.getElementById('htmlAutoAdaptTheme')?.checked ?? true;
+
+      if (!rawHtml.trim()) {
+        showToast('Вставьте HTML код для импорта', 'error');
+        return;
+      }
+
+      const cleanHtml = sanitizeHtmlForAadna(rawHtml, adaptTheme);
+
+      if (activeHtmlImportFieldPath) {
+        const editor = window.activeEditors && window.activeEditors[activeHtmlImportFieldPath];
+        if (editor) {
+          editor.setMarkdown(cleanHtml);
+        } else {
+          const input = document.querySelector(`[data-field-path="${activeHtmlImportFieldPath}"]`);
+          if (input) {
+            input.value = cleanHtml;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
+
+      closeHtmlImportModal();
+      showToast('HTML код очищен и встроен в пост!', 'success');
+    });
+  }
 }
 
 // Запуск
