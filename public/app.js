@@ -370,8 +370,8 @@ function buildFormHTML(fields, parentPath = '') {
     } 
     else if (field.type === 'image') {
       inputControl = `
-        <div class="uploader-area" id="uploader_${fieldPath.replace(/\./g, '_')}">
-          <span style="font-size: 0.85rem; color: var(--color-muted);">Перетащите картинку сюда или нажмите для выбора</span>
+        <div class="uploader-area" id="uploader_${fieldPath.replace(/\./g, '_')}" tabindex="0">
+          <span style="font-size: 0.85rem; color: var(--color-muted);">Перетащите, нажмите или вставьте (Ctrl+V) картинку</span>
           <input type="file" accept="image/*" style="display: none;" id="file_input_${fieldPath.replace(/\./g, '_')}">
           <input type="hidden" data-field-path="${fieldPath}">
           <div class="uploader-preview" id="preview_${fieldPath.replace(/\./g, '_')}" style="display: none;"></div>
@@ -394,7 +394,7 @@ function buildFormHTML(fields, parentPath = '') {
       `;
     }
     else if (field.type === 'date') {
-      inputControl = `<input type="date" data-field-path="${fieldPath}">`;
+      inputControl = `<input type="datetime-local" data-field-path="${fieldPath}" step="1">`;
     } 
     else if (field.type === 'number') {
       inputControl = `<input type="number" data-field-path="${fieldPath}">`;
@@ -413,18 +413,11 @@ function buildFormHTML(fields, parentPath = '') {
 
     const fullWidthClass = (field.type === 'rich-text' || field.type === 'text') ? 'full-width' : '';
     const showLabel = field.type !== 'boolean';
-    const canImportHtml = field.type === 'rich-text' || field.type === 'text' || field.name === 'history' || field.name === 'overview' || field.name === 'details_y';
-    const htmlBtn = canImportHtml ? `
-      <button type="button" class="btn btn-sm open-html-import-btn" data-field-path="${fieldPath}" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; background: rgba(0,229,192,0.1); color: var(--color-accent); border: 1px solid rgba(0,229,192,0.3); border-radius: 4px; font-weight: 600;">
-        🌐 Вставить HTML
-      </button>
-    ` : '';
     
     html += `
       <div class="form-group ${fullWidthClass}">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem;">
           ${showLabel ? `<label style="margin: 0;">${field.label}${isRequired}</label>` : '<div></div>'}
-          ${htmlBtn}
         </div>
         ${inputControl}
         ${descHTML}
@@ -461,6 +454,18 @@ function initializeFormEvents() {
     fileInput.addEventListener('change', async () => {
       if (fileInput.files.length > 0) {
         await handleImageUpload(fileInput.files[0], hiddenInput, previewDiv);
+      }
+    });
+
+    // Paste support
+    area.addEventListener('paste', async (e) => {
+      const items = (e.clipboardData || window.clipboardData).items;
+      for (const item of items) {
+        if (item.type.indexOf('image') === 0) {
+          const file = item.getAsFile();
+          await handleImageUpload(file, hiddenInput, previewDiv);
+          break;
+        }
       }
     });
 
@@ -636,8 +641,8 @@ function addObjectListRow(fieldPath, data = null) {
   row.className = 'object-list-item';
   row.innerHTML = `
     <!-- Блок картинки -->
-    <div class="uploader-area" id="uploader_${itemPath.replace(/\./g, '_')}">
-      <span style="font-size: 0.75rem; color: var(--color-muted);">Изображение</span>
+    <div class="uploader-area" id="uploader_${itemPath.replace(/\./g, '_')}" tabindex="0">
+      <span style="font-size: 0.75rem; color: var(--color-muted);">Кликните для загрузки или вставьте картинку (Ctrl+V)</span>
       <input type="file" accept="image/*" style="display: none;" id="file_input_${itemPath.replace(/\./g, '_')}">
       <input type="hidden" data-object-field-path="image" value="${data?.image || ''}">
       <div class="uploader-preview" id="preview_${itemPath.replace(/\./g, '_')}" style="display: none;"></div>
@@ -662,6 +667,17 @@ function addObjectListRow(fieldPath, data = null) {
   uploaderArea.addEventListener('click', (e) => {
     if (e.target.classList.contains('remove-img-btn')) return;
     fileInput.click();
+  });
+
+  uploaderArea.addEventListener('paste', async (e) => {
+    const items = (e.clipboardData || window.clipboardData).items;
+    for (const item of items) {
+      if (item.type.indexOf('image') === 0) {
+        const file = item.getAsFile();
+        await handleImageUpload(file, hiddenInput, previewDiv);
+        break;
+      }
+    }
   });
 
   fileInput.addEventListener('change', async () => {
@@ -715,8 +731,12 @@ function populateForm(data) {
     let val = getValueByPath(data, path);
     if (val === undefined) return;
 
-    if (control.type === 'date' && typeof val === 'string' && val.includes('T')) {
-      val = val.split('T')[0];
+    if (control.type === 'datetime-local' && typeof val === 'string') {
+      if (val.includes('T')) {
+        val = val.substring(0, 19);
+      } else {
+        val = val + 'T00:00:00';
+      }
     }
 
     if (control.tagName === 'SELECT') {
@@ -797,6 +817,7 @@ function populateForm(data) {
       initialValue: val,
       theme: 'dark',
       language: 'ru-RU',
+      autofocus: false,
       toolbarItems: [
         ['heading', 'bold', 'italic', 'strike'],
         ['hr', 'quote'],
@@ -1449,6 +1470,7 @@ async function initApp() {
 
     if (hash === '#/configuration') {
       document.getElementById('configView').style.display = 'block';
+      document.querySelector('.app-sidebar').style.display = 'flex';
       renderSidebar();
       renderConfigPanel();
     }
@@ -1474,9 +1496,20 @@ async function initApp() {
         document.getElementById('deleteEntryBtn').style.display = 'none';
         document.getElementById('formTitle').innerText = `Новая запись: ${ACTIVE_COLLECTION_CONFIG.label}`;
         
+        document.querySelector('.app-sidebar').style.display = 'none';
+        window.scrollTo(0, 0);
+        
         // Заполняем дефолтные значения
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+
         const defaults = {
-          date: new Date().toISOString().split('T')[0],
+          date: `${y}-${m}-${d}T${h}:${min}:${s}`,
           draft: true
         };
         
@@ -1505,6 +1538,8 @@ async function initApp() {
         document.getElementById('revertEntryBtn').style.display = 'inline-flex';
         document.getElementById('deleteEntryBtn').style.display = 'inline-flex';
         document.getElementById('formTitle').innerText = `Редактирование: ${slug}`;
+        document.querySelector('.app-sidebar').style.display = 'none';
+        window.scrollTo(0, 0);
         
         showToast('Загрузка данных записи...', 'info');
         try {
@@ -1526,6 +1561,7 @@ async function initApp() {
         buildTableHeader();
         document.getElementById('listView').style.display = 'block';
         document.getElementById('listTitle').innerText = ACTIVE_COLLECTION_CONFIG.label;
+        document.querySelector('.app-sidebar').style.display = 'flex';
         loadEntries();
       }
     }
