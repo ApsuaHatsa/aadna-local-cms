@@ -269,7 +269,7 @@ async function fetchYtreeScreenshot(clade, slug) {
 
       console.log('Fetching YTree screenshot for ' + clade + ' (' + theme + ' theme)...');
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 60000);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
