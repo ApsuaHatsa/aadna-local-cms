@@ -1,7 +1,16 @@
 import fs from 'fs-extra';
 import path from 'path';
 import matter from 'gray-matter';
+import yaml from 'yaml';
 import { fileURLToPath } from 'url';
+
+// Переопределяем движок YAML для gray-matter
+matter.engines.yaml = {
+  parse: yaml.parse.bind(yaml),
+  stringify: function(data, options) {
+    return yaml.stringify(data, { lineWidth: 0 });
+  }
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

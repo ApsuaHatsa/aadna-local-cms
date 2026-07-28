@@ -5,6 +5,15 @@ import path from 'path';
 import fs from 'fs-extra';
 import yaml from 'yaml';
 import matter from 'gray-matter';
+
+// Переопределяем движок YAML для gray-matter, чтобы использовать пакет 'yaml' (v2) 
+// вместо устаревшего js-yaml. Это решает проблему со случайными >- и переносами строк в Markdown таблицах.
+matter.engines.yaml = {
+  parse: yaml.parse.bind(yaml),
+  stringify: function(data, options) {
+    return yaml.stringify(data, { lineWidth: 0 });
+  }
+};
 import { fileURLToPath } from 'url';
 import { execSync, exec, spawn } from 'child_process';
 
