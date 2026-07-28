@@ -150,11 +150,11 @@ fastify.get('/api/screenshot', async (request, reply) => {
     // Set a large viewport so the tree doesn't get clamped by responsive design
     await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
 
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 15000 });
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 600000 });
 
     // Wait for the tree, empty state, or error state to load
     let state = null;
-    for (let i = 0; i < 40; i++) { // 10 seconds max (40 * 250ms)
+    for (let i = 0; i < 240; i++) { // 60 seconds max (240 * 250ms)
       state = await page.evaluate(() => {
         const findEl = (selector) => {
           const light = document.querySelector(selector);
