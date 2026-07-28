@@ -153,6 +153,7 @@ fastify.get('/api/screenshot', async (request, reply) => {
     }
   }
 
+  const url = `https://ytree.apsny.dev/${encodeURIComponent(resolvedClade)}`;
   const currentBrowser = await getBrowser(request.log);
   let page;
 
