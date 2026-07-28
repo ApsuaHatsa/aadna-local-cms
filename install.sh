@@ -268,6 +268,11 @@ cd "$CMS_DIR"
 echo -e "${YELLOW}Запуск npm install в $CMS_DIR...${NC}"
 npm install
 
+echo -e "${YELLOW}Запуск npm install для Screenshot API...${NC}"
+cd screenshot-api
+npm install
+cd ..
+
 # -----------------------------------------------------------------------------
 # Этап 11-12: Создание ярлыков
 # -----------------------------------------------------------------------------

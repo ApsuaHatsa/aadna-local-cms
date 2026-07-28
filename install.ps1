@@ -252,6 +252,11 @@ Set-Location $cmsDir
 Write-Host "Запуск npm install в $cmsDir..." -ForegroundColor Yellow
 npm install
 
+Write-Host "Запуск npm install для Screenshot API..." -ForegroundColor Yellow
+Set-Location "$cmsDir\screenshot-api"
+npm install
+Set-Location $cmsDir
+
 # -----------------------------------------------------------------------------
 # Этап 11-12: Создание ярлыков
 # -----------------------------------------------------------------------------

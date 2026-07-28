@@ -255,7 +255,7 @@ async function fetchYtreeScreenshot(clade, slug) {
     const cleanClade = clade.replace(/[^a-zA-Z0-9-]/g, '');
     const filename = 'ytree_' + cleanClade + '_' + theme + '.png';
     const targetPath = path.join(mediaDir, filename);
-    const url = 'https://ytree-api.apsny.dev/api/screenshot?clade=' + clade + (theme === 'dark' ? '&theme=dark' : '');
+    const url = 'http://127.0.0.1:3005/api/screenshot?clade=' + clade + (theme === 'dark' ? '&theme=dark' : '');
 
     try {
       if (await fs.pathExists(targetPath)) {
@@ -604,9 +604,28 @@ app.post('/api/publish', (req, res) => {
 
 // Запуск сервера
 function startServer(port) {
+  // Launch Screenshot API
+  const screenshotApi = spawn('node', ['index.js'], {
+    cwd: path.join(__dirname, 'screenshot-api'),
+    stdio: 'ignore',
+    detached: false
+  });
+
+  screenshotApi.on('error', (err) => {
+    console.error('Failed to start Screenshot API:', err);
+  });
+
+  const cleanupApi = () => {
+    if (screenshotApi) screenshotApi.kill();
+  };
+  process.on('SIGINT', () => { cleanupApi(); process.exit(); });
+  process.on('SIGTERM', () => { cleanupApi(); process.exit(); });
+  process.on('exit', cleanupApi);
+
   const server = app.listen(port, () => {
     console.log(`\n==================================================`);
     console.log(`🧬 AADNA Local Admin running at: http://localhost:${port}`);
+    console.log(`🖼️  Screenshot API running at: http://localhost:3005`);
     console.log(`Working with repository: ${AADNA_PATH}`);
     console.log(`==================================================\n`);
     
