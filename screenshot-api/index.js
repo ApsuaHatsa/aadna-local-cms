@@ -15,52 +15,64 @@ if (!fs.existsSync(cacheDir)) {
 const fastify = Fastify({ logger: true });
 
 let browser;
+let browserIdleTimeout;
 
-// Launch browser once on startup
-fastify.addHook('onReady', async () => {
-  fastify.log.info('Launching Puppeteer browser...');
-  browser = await puppeteer.launch({
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--js-flags="--max-old-space-size=256"',
-      '--single-process'
-    ],
-    headless: "new"
-  });
+// Launch browser on-demand and close it after 60s of inactivity
+async function getBrowser(log) {
+  if (!browser) {
+    log.info('Launching Puppeteer browser on-demand...');
+    browser = await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--js-flags="--max-old-space-size=256"'
+      ],
+      headless: "new"
+    });
+  }
   
-  // Setup automated cache cleanup every hour
-  setInterval(() => {
-    try {
-      const files = fs.readdirSync(cacheDir);
-      const now = Date.now();
-      let fileStats = [];
-      
-      files.forEach(file => {
-        const filePath = path.join(cacheDir, file);
-        const stats = fs.statSync(filePath);
-        // Delete files older than 24 hours
-        if (now - stats.mtimeMs > 24 * 60 * 60 * 1000) {
-          fs.unlinkSync(filePath);
-        } else {
-          fileStats.push({ filePath, mtimeMs: stats.mtimeMs });
-        }
-      });
-      
-      // Limit to 100 files max to prevent disk exhaustion
-      if (fileStats.length > 100) {
-        fileStats.sort((a, b) => a.mtimeMs - b.mtimeMs); // Oldest first
-        const toDelete = fileStats.slice(0, fileStats.length - 100);
-        toDelete.forEach(f => fs.unlinkSync(f.filePath));
-      }
-    } catch (e) {
-      fastify.log.error('Cache cleanup error:', e);
+  if (browserIdleTimeout) clearTimeout(browserIdleTimeout);
+  browserIdleTimeout = setTimeout(async () => {
+    if (browser) {
+      log.info('Closing idle Puppeteer browser to free RAM...');
+      await browser.close();
+      browser = null;
     }
-  }, 60 * 60 * 1000); // 1 hour
-});
+  }, 60000); // 60 seconds
+
+  return browser;
+}
+
+// Setup automated cache cleanup every hour
+setInterval(() => {
+  try {
+    const files = fs.readdirSync(cacheDir);
+    const now = Date.now();
+    let fileStats = [];
+    
+    files.forEach(file => {
+      const filePath = path.join(cacheDir, file);
+      const stats = fs.statSync(filePath);
+      if (now - stats.mtimeMs > 24 * 60 * 60 * 1000) {
+        fs.unlinkSync(filePath);
+      } else {
+        fileStats.push({ filePath, mtimeMs: stats.mtimeMs });
+      }
+    });
+    
+    if (fileStats.length > 100) {
+      fileStats.sort((a, b) => a.mtimeMs - b.mtimeMs);
+      const toDelete = fileStats.slice(0, fileStats.length - 100);
+      toDelete.forEach(f => fs.unlinkSync(f.filePath));
+    }
+  } catch (e) {
+    console.error('Cache cleanup error:', e);
+  }
+}, 60 * 60 * 1000);
 
 fastify.addHook('onClose', async () => {
+  if (browserIdleTimeout) clearTimeout(browserIdleTimeout);
   if (browser) await browser.close();
 });
 
@@ -141,11 +153,11 @@ fastify.get('/api/screenshot', async (request, reply) => {
     }
   }
 
-  const url = `https://ytree.apsny.dev/${encodeURIComponent(resolvedClade)}`;
+  const currentBrowser = await getBrowser(request.log);
   let page;
 
   try {
-    page = await browser.newPage();
+    page = await currentBrowser.newPage();
     
     // Set a large viewport so the tree doesn't get clamped by responsive design
     await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
