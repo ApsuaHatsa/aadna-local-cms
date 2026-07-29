@@ -489,20 +489,32 @@ function initializeFormEvents() {
     });
   });
 
-  // Навешиваем обработчики для кнопок "Добавить" в массивах объектов
-  CONFIG?.content?.forEach(col => {
-    if (col.name !== ACTIVE_COLLECTION) return;
-    col.fields.forEach(field => {
-      if (field.type === 'object' && field.list) {
-        const fieldPath = field.name;
-        const addBtn = document.getElementById(`add_btn_${fieldPath.replace(/\./g, '_')}`);
-        if (addBtn) {
-          addBtn.addEventListener('click', () => {
-            addObjectListRow(fieldPath, null);
-          });
+  // Навешиваем обработчики для кнопок "Добавить" в массивах объектов (рекурсивно)
+  function attachAddBtnListeners(fields, prefix = '') {
+    fields.forEach(field => {
+      const fieldPath = prefix ? `${prefix}.${field.name}` : field.name;
+      if (field.type === 'object') {
+        if (field.list) {
+          const addBtn = document.getElementById(`add_btn_${fieldPath.replace(/\./g, '_')}`);
+          if (addBtn) {
+            // Удаляем старый обработчик путем клонирования (если он был)
+            const newBtn = addBtn.cloneNode(true);
+            addBtn.parentNode.replaceChild(newBtn, addBtn);
+            newBtn.addEventListener('click', () => {
+              addObjectListRow(fieldPath, null);
+            });
+          }
+        }
+        if (field.fields) {
+          attachAddBtnListeners(field.fields, fieldPath);
         }
       }
     });
+  }
+
+  CONFIG?.content?.forEach(col => {
+    if (col.name !== ACTIVE_COLLECTION) return;
+    attachAddBtnListeners(col.fields);
   });
 
   // Навешиваем обработчики для кнопок вставки HTML
