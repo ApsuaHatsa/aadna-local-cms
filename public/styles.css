@@ -295,6 +295,7 @@ label span.required {
 
 input[type="text"],
 input[type="date"],
+input[type="datetime-local"],
 input[type="number"],
 select,
 textarea {
@@ -307,10 +308,12 @@ textarea {
   font-size: 0.9rem;
   outline: none;
   transition: all 0.2s ease;
+  color-scheme: dark;
 }
 
 input[type="text"]:focus,
 input[type="date"]:focus,
+input[type="datetime-local"]:focus,
 input[type="number"]:focus,
 select:focus,
 textarea:focus {
