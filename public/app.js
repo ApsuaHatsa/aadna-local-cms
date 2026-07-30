@@ -1062,14 +1062,23 @@ function serializeForm() {
 // Сохранение записи на диск
 // -----------------------------------------------------------------------------
 async function saveEntry(actionType = 'draft') {
+  const isPreview = actionType === 'preview';
+
+  if (!isPreview) {
+    const updatedInput = document.querySelector('input[data-field-path="updated"]');
+    if (updatedInput) {
+      const tzOffset = new Date().getTimezoneOffset() * 60000;
+      const localISOTime = new Date(Date.now() - tzOffset).toISOString().slice(0, 19);
+      updatedInput.value = localISOTime;
+    }
+  }
+
   const data = serializeForm();
-  
   if (!data.title) {
     showToast('Заголовок обязателен для заполнения!', 'error');
     return null;
   }
 
-  const isPreview = actionType === 'preview';
   showToast(isPreview ? 'Генерация временного предпросмотра...' : 'Сохранение файла на диск (Генерация древа YTree может занять до 15 сек)...', 'info');
 
   try {
