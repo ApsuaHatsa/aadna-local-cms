@@ -946,3 +946,14 @@ table.entries-table tr:hover td {
   color: var(--color-danger);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
+
+/* Ограничение размеров картинок в Markdown-редакторе (EasyMDE) */
+.editor-preview img,
+.editor-preview-side img,
+.CodeMirror-line img {
+  max-width: 100%;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
