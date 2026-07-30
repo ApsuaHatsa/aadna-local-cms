@@ -325,7 +325,20 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
     }
 
     // Определение слага
-    const nextSlug = getEntrySlug(normalized, colSettings);
+    let nextSlug = getEntrySlug(normalized, colSettings);
+    
+    // Проверка на уникальность слага (защита от перезаписи однофамильцев и т.д.)
+    let slugSuffix = 1;
+    let baseSlug = nextSlug;
+    let checkPath = path.join(colDir, `${nextSlug}.md`);
+    
+    if (!cleanOriginalSlug || cleanOriginalSlug !== baseSlug) {
+      while (await fs.pathExists(checkPath)) {
+        nextSlug = `${baseSlug}-${slugSuffix}`;
+        checkPath = path.join(colDir, `${nextSlug}.md`);
+        slugSuffix++;
+      }
+    }
 
     // Автоматическая генерация скриншотов YTree
     if (collection === 'results') {
