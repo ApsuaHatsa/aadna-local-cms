@@ -1200,13 +1200,16 @@ async function openPublishModal() {
           
           const item = document.createElement('div');
           item.style.color = color;
-          item.style.marginBottom = '0.25rem';
+          item.style.marginBottom = '0.4rem';
           item.style.display = 'flex';
-          item.style.justifyContent = 'space-between';
+          item.style.alignItems = 'center';
           
           item.innerHTML = `
-            <span>${f.file}</span>
-            <span style="font-weight: bold; font-size: 0.75rem;">[${statusChar}]</span>
+            <label style="display: flex; align-items: center; gap: 0.5rem; width: 100%; cursor: pointer;">
+              <input type="checkbox" class="git-file-checkbox" value="${f.file}" checked style="accent-color: var(--color-accent); flex-shrink: 0;">
+              <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.file}</span>
+              <span style="font-weight: bold; font-size: 0.75rem; flex-shrink: 0;">[${statusChar}]</span>
+            </label>
           `;
           filesList.appendChild(item);
         });
@@ -1275,15 +1278,27 @@ async function startGitPublish() {
     showToast('Длина описания не должна превышать 30 символов!', 'error');
     return;
   }
+
+  const selectedFiles = Array.from(document.querySelectorAll('.git-file-checkbox:checked')).map(cb => cb.value);
+  const totalFiles = document.querySelectorAll('.git-file-checkbox').length;
+  
+  if (selectedFiles.length === 0 && totalFiles > 0) {
+    showToast('Выберите хотя бы один файл для коммита!', 'error');
+    return;
+  }
   
   consoleLog.style.display = 'block';
-  consoleLog.innerText = '> git add .\n> git commit -m "' + message + '"\n';
+  if (selectedFiles.length > 0 && selectedFiles.length < totalFiles) {
+    consoleLog.innerText = '> git reset\n> git add (выбранные файлы)\n> git commit -m "' + message + '"\n';
+  } else {
+    consoleLog.innerText = '> git add .\n> git commit -m "' + message + '"\n';
+  }
   
   try {
     const response = await fetch('/api/publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message, files: selectedFiles })
     });
     
     const result = await response.json();

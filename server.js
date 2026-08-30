@@ -605,13 +605,13 @@ app.get('/api/git-diff', (req, res) => {
 
 // 7. POST /api/publish - Коммит и отправка изменений в Git
 app.post('/api/publish', (req, res) => {
-  const { message } = req.body;
+  const { message, files } = req.body;
   if (!message) {
     return res.status(400).json({ error: 'Commit message is required' });
   }
 
   console.log(`[Git Publish] Running commit: "${message}"`);
-  const result = publish(message);
+  const result = publish(message, files);
   res.json(result);
 });
 
