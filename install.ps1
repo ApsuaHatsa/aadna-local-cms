@@ -74,6 +74,8 @@ if ($gitCheck -eq $null) {
     
     Write-Host "Скачивание Git (52 MB)..." -ForegroundColor Yellow
     $webClient.DownloadFile($gitUrl, $gitExe)
+    if (!(Test-Path $gitExe)) { throw "Файл git-installer.exe не найден после скачивания. Возможно, антивирус заблокировал загрузку." }
+    Unblock-File -Path $gitExe -ErrorAction SilentlyContinue
     
     Write-Host "Установка Git (это может занять 1 минуту)..." -ForegroundColor Yellow
     $process = Start-Process -FilePath $gitExe -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-" -Wait -PassThru
@@ -111,6 +113,8 @@ if ($needsNode) {
     
     Write-Host "Скачивание Node.js (30 MB)..." -ForegroundColor Yellow
     $webClient.DownloadFile($nodeUrl, $nodeMsi)
+    if (!(Test-Path $nodeMsi)) { throw "Файл node-installer.msi не найден после скачивания. Возможно, антивирус заблокировал загрузку." }
+    Unblock-File -Path $nodeMsi -ErrorAction SilentlyContinue
     
     Write-Host "Установка Node.js (это может занять 1-2 минуты)..." -ForegroundColor Yellow
     $msiArgs = "/i `"$nodeMsi`" /qn /norestart /l*v `"$(Join-Path $tempDir 'node-install.log')`""
@@ -136,6 +140,8 @@ if ($ghCheck -eq $null) {
     
     Write-Host "Скачивание gh..." -ForegroundColor Yellow
     $webClient.DownloadFile($ghUrl, $ghMsi)
+    if (!(Test-Path $ghMsi)) { throw "Файл gh-installer.msi не найден после скачивания. Возможно, антивирус заблокировал загрузку." }
+    Unblock-File -Path $ghMsi -ErrorAction SilentlyContinue
     
     Write-Host "Установка gh..." -ForegroundColor Yellow
     $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", "`"$ghMsi`"", "/qn", "/norestart" -Wait -PassThru
@@ -165,6 +171,8 @@ if ($zolaCheck -eq $null) {
     
     Write-Host "Скачивание Zola (6 MB)..." -ForegroundColor Yellow
     $webClient.DownloadFile($zolaUrl, $zolaZip)
+    if (!(Test-Path $zolaZip)) { throw "Файл zola.zip не найден после скачивания. Возможно, антивирус заблокировал загрузку." }
+    Unblock-File -Path $zolaZip -ErrorAction SilentlyContinue
     
     Write-Host "Распаковка Zola..." -ForegroundColor Yellow
     Expand-Archive -Path $zolaZip -DestinationPath $binDir -Force
