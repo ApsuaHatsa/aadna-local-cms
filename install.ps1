@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # AADNA Local CMS - Windows Installer (PowerShell)
 # Apsny Production Inc.
 # =============================================================================
@@ -32,7 +32,7 @@ if ($choice -ne "") {
 Write-Host "-> Будет использована папка: $workspace" -ForegroundColor Yellow
 if (!(Test-Path $workspace)) {
     New-Item -ItemType Directory -Force -Path $workspace | Out-Null
-    Write-Host "✓ Папка создана." -ForegroundColor Green
+    Write-Host "[OK] Папка создана." -ForegroundColor Green
 }
 
 # Временная папка для скачивания установщиков
@@ -53,10 +53,10 @@ function Refresh-Path {
 # -----------------------------------------------------------------------------
 # Этап 2: Проверка и установка Git
 # -----------------------------------------------------------------------------
-Write-Host "`n[2/12] Проверка Git..." -ForegroundColor Blue
+Write-Host "`n[2/13] Проверка Git..." -ForegroundColor Blue
 $gitCheck = Get-Command git -ErrorAction SilentlyContinue
 if ($gitCheck -eq $null) {
-    Write-Host "✗ Git не установлен. Скачиваю Git для Windows..." -ForegroundColor Red
+    Write-Host "[!] Git не установлен. Скачиваю Git для Windows..." -ForegroundColor Red
     $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe"
     $gitExe = Join-Path $tempDir "git-installer.exe"
     
@@ -66,19 +66,18 @@ if ($gitCheck -eq $null) {
     Write-Host "Установка Git (это может занять 1 минуту)..." -ForegroundColor Yellow
     $process = Start-Process -FilePath $gitExe -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-" -Wait -PassThru
     if ($process.ExitCode -ne 0) {
-        Write-Error "Ошибка при установке Git. Установка прервана."
-        Exit 1
+        throw "Ошибка при установке Git (код: $($process.ExitCode))."
     }
-    Write-Host "✓ Git успешно установлен!" -ForegroundColor Green
+    Write-Host "[OK] Git успешно установлен!" -ForegroundColor Green
     Refresh-Path
 } else {
-    Write-Host "✓ Git уже установлен: $((git --version).Trim())" -ForegroundColor Green
+    Write-Host "[OK] Git уже установлен: $((git --version).Trim())" -ForegroundColor Green
 }
 
 # -----------------------------------------------------------------------------
 # Этап 3: Проверка и установка Node.js
 # -----------------------------------------------------------------------------
-Write-Host "`n[3/12] Проверка Node.js..." -ForegroundColor Blue
+Write-Host "`n[3/13] Проверка Node.js..." -ForegroundColor Blue
 $nodeCheck = Get-Command node -ErrorAction SilentlyContinue
 $needsNode = $true
 
@@ -86,10 +85,10 @@ if ($nodeCheck -ne $null) {
     $nodeVersionRaw = & node --version
     $nodeMajor = [int]($nodeVersionRaw.Substring(1).Split('.')[0])
     if ($nodeMajor -ge 20) {
-        Write-Host "✓ Node.js уже установлен: $nodeVersionRaw" -ForegroundColor Green
+        Write-Host "[OK] Node.js уже установлен: $nodeVersionRaw" -ForegroundColor Green
         $needsNode = $false
     } else {
-        Write-Host "✗ Установленная версия Node.js ($nodeVersionRaw) устарела. Требуется версия 20+." -ForegroundColor Red
+        Write-Host "[!] Установленная версия Node.js ($nodeVersionRaw) устарела. Требуется версия 20+." -ForegroundColor Red
     }
 }
 
@@ -116,10 +115,10 @@ if ($needsNode) {
 # -----------------------------------------------------------------------------
 # Этап 4: Проверка и установка GitHub CLI
 # -----------------------------------------------------------------------------
-Write-Host "`n[4/12] Проверка GitHub CLI (gh)..." -ForegroundColor Blue
+Write-Host "`n[4/13] Проверка GitHub CLI (gh)..." -ForegroundColor Blue
 $ghCheck = Get-Command gh -ErrorAction SilentlyContinue
 if ($ghCheck -eq $null) {
-    Write-Host "✗ GitHub CLI не установлен. Скачиваю..." -ForegroundColor Red
+    Write-Host "[!] GitHub CLI не установлен. Скачиваю..." -ForegroundColor Red
     $ghUrl = "https://github.com/cli/cli/releases/download/v2.65.0/gh_2.65.0_windows_amd64.msi"
     $ghMsi = Join-Path $tempDir "gh-installer.msi"
     
@@ -129,13 +128,12 @@ if ($ghCheck -eq $null) {
     Write-Host "Установка gh..." -ForegroundColor Yellow
     $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", "`"$ghMsi`"", "/qn", "/norestart" -Wait -PassThru
     if ($process.ExitCode -ne 0) {
-        Write-Error "Ошибка при установке GitHub CLI."
-        Exit 1
+        throw "Ошибка при установке GitHub CLI (код: $($process.ExitCode))."
     }
-    Write-Host "✓ GitHub CLI успешно установлен!" -ForegroundColor Green
+    Write-Host "[OK] GitHub CLI успешно установлен!" -ForegroundColor Green
     Refresh-Path
 } else {
-    Write-Host "✓ GitHub CLI уже установлен." -ForegroundColor Green
+    Write-Host "[OK] GitHub CLI уже установлен." -ForegroundColor Green
 }
 
 # -----------------------------------------------------------------------------
@@ -144,7 +142,7 @@ if ($ghCheck -eq $null) {
 Write-Host "`n[5/13] Проверка Zola..." -ForegroundColor Blue
 $zolaCheck = Get-Command zola -ErrorAction SilentlyContinue
 if ($zolaCheck -eq $null) {
-    Write-Host "✗ Zola не найдена. Скачиваю Zola для Windows..." -ForegroundColor Red
+    Write-Host "[!] Zola не найдена. Скачиваю Zola для Windows..." -ForegroundColor Red
     $zolaUrl = "https://github.com/getzola/zola/releases/download/v0.19.2/zola-v0.19.2-x86_64-pc-windows-msvc.zip"
     $zolaZip = Join-Path $tempDir "zola.zip"
     $binDir = Join-Path $workspace "bin"
@@ -165,10 +163,10 @@ if ($zolaCheck -eq $null) {
         [System.Environment]::SetEnvironmentVariable("Path", $userPath + ";" + $binDir, "User")
     }
     
-    Write-Host "✓ Zola успешно установлена!" -ForegroundColor Green
+    Write-Host "[OK] Zola успешно установлена!" -ForegroundColor Green
     Refresh-Path
 } else {
-    Write-Host "✓ Zola уже установлена." -ForegroundColor Green
+    Write-Host "[OK] Zola уже установлена." -ForegroundColor Green
 }
 
 # -----------------------------------------------------------------------------
@@ -178,7 +176,7 @@ Write-Host "`n[6/13] Авторизация на GitHub..." -ForegroundColor Blu
 
 $authCheck = & gh auth status 2>&1
 if ($authCheck -like "*Logged in to github.com*") {
-    Write-Host "✓ Вы уже авторизованы в GitHub." -ForegroundColor Green
+    Write-Host "[OK] Вы уже авторизованы в GitHub." -ForegroundColor Green
 } else {
     Write-Host "Сейчас откроется браузер для авторизации." -ForegroundColor Yellow
     Write-Host "Шаги:" -ForegroundColor Yellow
@@ -197,12 +195,12 @@ if ($authCheck -like "*Logged in to github.com*") {
 Write-Host "Проверка доступа к репозиторию aadna..." -ForegroundColor Yellow
 $repoCheck = & gh repo view ApsuaHatsa/aadna --json name 2>&1
 if ($repoCheck -like "*Could not resolve to a Repository*") {
-    Write-Host "`n✗ ВНИМАНИЕ: У вашего аккаунта нет доступа к репозиторию ApsuaHatsa/aadna." -ForegroundColor Red
+    Write-Host "`n[!] ВНИМАНИЕ: У вашего аккаунта нет доступа к репозиторию ApsuaHatsa/aadna." -ForegroundColor Red
     Write-Host "Попросите владельца репозитория добавить вас в Collaborators (Настройки -> Access)." -ForegroundColor Red
     Write-Host "После того, как вас добавят, нажмите Enter здесь, чтобы продолжить..."
     Read-Host
 } else {
-    Write-Host "✓ Доступ подтвержден!" -ForegroundColor Green
+    Write-Host "[OK] Доступ подтвержден!" -ForegroundColor Green
 }
 
 # -----------------------------------------------------------------------------
@@ -220,7 +218,7 @@ if ($gitEmail -eq $null -or $gitEmail -eq "") {
     $gitEmail = Read-Host "Введите ваш e-mail от аккаунта GitHub"
     git config --global user.email $gitEmail
 }
-Write-Host "✓ Имя Git: $gitName <$gitEmail>" -ForegroundColor Green
+Write-Host "[OK] Имя Git: $gitName <$gitEmail>" -ForegroundColor Green
 
 # -----------------------------------------------------------------------------
 # Этапы 8-9: Клонирование репозиториев
@@ -232,7 +230,7 @@ $cmsDir = Join-Path $workspace "aadna-local-cms"
 
 # Сайт
 if (Test-Path $siteDir) {
-    Write-Host "✓ Папка с сайтом aadna уже существует. Обновляю код..." -ForegroundColor Yellow
+    Write-Host "[OK] Папка с сайтом aadna уже существует. Обновляю код..." -ForegroundColor Yellow
     Set-Location $siteDir
     git pull origin main
 } else {
@@ -243,7 +241,7 @@ if (Test-Path $siteDir) {
 
 # CMS
 if (Test-Path $cmsDir) {
-    Write-Host "✓ Папка с CMS уже существует. Обновляю код..." -ForegroundColor Yellow
+    Write-Host "[OK] Папка с CMS уже существует. Обновляю код..." -ForegroundColor Yellow
     Set-Location $cmsDir
     git pull origin main
 } else {
@@ -282,9 +280,9 @@ try {
     $Shortcut.IconLocation = "shell32.dll,14" # Красивая иконка папки с шестерёнкой
     $Shortcut.Description = "Запустить локальную админку AADNA"
     $Shortcut.Save()
-    Write-Host "✓ Ярлык 'AADNA CMS' создан на вашем Рабочем столе!" -ForegroundColor Green
+    Write-Host "[OK] Ярлык 'AADNA CMS' создан на вашем Рабочем столе!" -ForegroundColor Green
 } catch {
-    Write-Host "⚠ Не удалось создать ярлык на рабочем столе (нет прав), но вы можете запускать через run.bat." -ForegroundColor Yellow
+    Write-Host "[!] Не удалось создать ярлык на рабочем столе (нет прав), но вы можете запускать через run.bat." -ForegroundColor Yellow
 }
 
 # -----------------------------------------------------------------------------
