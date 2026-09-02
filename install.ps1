@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # AADNA Local CMS - Windows Installer (PowerShell)
 # Apsny Production Inc.
 # =============================================================================
@@ -269,6 +269,32 @@ if (Test-Path $cmsDir) {
 # Этап 10: Установка зависимостей npm
 # -----------------------------------------------------------------------------
 Write-Host "`n[10/13] Установка пакетов Node.js..." -ForegroundColor Blue
+
+# Убеждаемся, что npm доступен в текущей сессии (защита от проблемы с PATH на чистых ПК)
+Refresh-Path
+$npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+if ($npmCmd -eq $null) {
+    Write-Host "[!] npm не найден в PATH. Ищу по стандартным путям..." -ForegroundColor Yellow
+    $npmCandidates = @(
+        "$env:ProgramFiles\nodejs\npm.cmd",
+        "${env:ProgramFiles(x86)}\nodejs\npm.cmd",
+        "$env:APPDATA\npm\npm.cmd"
+    )
+    $npmFound = $false
+    foreach ($candidate in $npmCandidates) {
+        if (Test-Path $candidate) {
+            $npmDir = Split-Path $candidate
+            $env:Path = $npmDir + ";" + $env:Path
+            Write-Host "[OK] npm найден: $candidate" -ForegroundColor Green
+            $npmFound = $true
+            break
+        }
+    }
+    if (-not $npmFound) {
+        throw "npm не найден после установки Node.js. Попробуйте закрыть это окно и запустить install.bat заново."
+    }
+}
+
 Set-Location $cmsDir
 Write-Host "Запуск npm install в $cmsDir..." -ForegroundColor Yellow
 npm install
