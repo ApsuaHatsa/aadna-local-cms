@@ -6,10 +6,18 @@ import fs from 'fs-extra';
 import yaml from 'yaml';
 import matter from 'gray-matter';
 
+// Безопасный парсер YAML, очищающий Windows CRLF (\r\n) переносы строк.
+// В библиотеке 'yaml' (v2) наличие \r на конце строк в блочных списках 
+// вызывает синтаксическую ошибку "Unexpected scalar at node end".
+export function safeYamlParse(str) {
+  if (typeof str !== 'string') return str;
+  return yaml.parse(str.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
+}
+
 // Переопределяем движок YAML для gray-matter, чтобы использовать пакет 'yaml' (v2) 
 // вместо устаревшего js-yaml. Это решает проблему со случайными >- и переносами строк в Markdown таблицах.
 matter.engines.yaml = {
-  parse: yaml.parse.bind(yaml),
+  parse: safeYamlParse,
   stringify: function(data, options) {
     return yaml.stringify(data, { lineWidth: 0 });
   }
@@ -69,7 +77,7 @@ app.get('/api/config', async (req, res) => {
       return res.status(404).json({ error: 'Config file .pages.yml not found' });
     }
     const raw = await fs.readFile(PAGES_CONFIG_PATH, 'utf-8');
-    const parsed = yaml.parse(raw);
+    const parsed = safeYamlParse(raw);
     res.json({ config: parsed, raw });
   } catch (error) {
     console.error(error);
@@ -87,7 +95,7 @@ app.post('/api/config', async (req, res) => {
   try {
     // Валидируем YAML синтаксис перед сохранением
     try {
-      yaml.parse(raw);
+      safeYamlParse(raw);
     } catch (parseErr) {
       return res.status(400).json({ error: `Некорректный синтаксис YAML: ${parseErr.message}` });
     }
@@ -110,7 +118,7 @@ async function getCollectionSettings(collectionName) {
     throw new Error('Config file .pages.yml not found');
   }
   const raw = await fs.readFile(PAGES_CONFIG_PATH, 'utf-8');
-  const parsed = yaml.parse(raw);
+  const parsed = safeYamlParse(raw);
   const collection = parsed.content?.find(c => c.name === collectionName);
   if (!collection) {
     throw new Error(`Collection "${collectionName}" not found in config`);
@@ -155,7 +163,13 @@ app.get('/api/collections/:collection/entries', async (req, res) => {
 
       const filePath = path.join(colDir, file);
       const raw = await fs.readFile(filePath, 'utf-8');
-      const parsed = matter(raw);
+      let parsed;
+      try {
+        parsed = matter(raw);
+      } catch (err) {
+        console.error(`[CMS] Ошибка парсинга frontmatter в ${file}:`, err.message);
+        continue;
+      }
 
       // Исключаем посты legacy_wp для results
       if (collection === 'results' && parsed.data.extra?.content_mode === 'legacy_wp') continue;
