@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # AADNA Local CMS - Windows Installer (PowerShell)
 # Apsny Production Inc.
 # =============================================================================
@@ -319,12 +319,13 @@ Write-Host "`n[11-12/13] Создание файлов быстрого запу
 
 # Создаем ярлык на Рабочем столе
 $desktopPath = [System.IO.Path]::Combine([System.Environment]::GetFolderPath('Desktop'), "AADNA CMS.lnk")
-$launcherPath = Join-Path $cmsDir "run.bat"
+$runPs1Path = Join-Path $cmsDir "run.ps1"
 
 try {
     $WshShell = New-Object -comObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($desktopPath)
-    $Shortcut.TargetPath = $launcherPath
+    $Shortcut.TargetPath = "powershell.exe"
+    $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$runPs1Path`""
     $Shortcut.WorkingDirectory = $cmsDir
     $Shortcut.IconLocation = "shell32.dll,14" # Красивая иконка папки с шестерёнкой
     $Shortcut.Description = "Запустить локальную админку AADNA"
