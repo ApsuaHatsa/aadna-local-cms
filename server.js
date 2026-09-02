@@ -644,10 +644,24 @@ function startServer(port) {
     
     // Авто-открытие браузера
     try {
-      const startCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-      const child = spawn(startCmd, [`http://localhost:${port}`], {
+      const url = `http://localhost:${port}`;
+      let cmd, args;
+      if (process.platform === 'win32') {
+        cmd = 'cmd.exe';
+        args = ['/c', 'start', '""', url];
+      } else if (process.platform === 'darwin') {
+        cmd = 'open';
+        args = [url];
+      } else {
+        cmd = 'xdg-open';
+        args = [url];
+      }
+      const child = spawn(cmd, args, {
         detached: true,
         stdio: 'ignore'
+      });
+      child.on('error', () => {
+        // Игнорируем ошибки авто-открытия
       });
       child.unref();
     } catch (e) {
