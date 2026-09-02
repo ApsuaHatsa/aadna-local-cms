@@ -7,6 +7,18 @@ $ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# -----------------------------------------------------------------------------
+# Проверка прав Администратора и автоматический перезапуск с повышением (UAC)
+# -----------------------------------------------------------------------------
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "Для автоматической тихой установки компонентов требуются права Администратора." -ForegroundColor Yellow
+    Write-Host "Запрашиваю права Администратора (UAC)..." -ForegroundColor Yellow
+    $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
+    Start-Process powershell.exe -ArgumentList @("-NoExit", "-ExecutionPolicy", "Bypass", "-File", $scriptPath) -Verb RunAs
+    exit
+}
+
 try {
 
 Write-Host "" 
@@ -103,7 +115,7 @@ if ($needsNode) {
     Write-Host "Установка Node.js (это может занять 1-2 минуты)..." -ForegroundColor Yellow
     $msiArgs = "/i `"$nodeMsi`" /qn /norestart /l*v `"$(Join-Path $tempDir 'node-install.log')`""
     $process = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
+    if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
         Write-Host "[!] Ошибка установки Node.js (код: $($process.ExitCode)). Лог: $(Join-Path $tempDir 'node-install.log')" -ForegroundColor Red
         Write-Host "Попробуйте запустить установщик от имени Администратора (правый клик -> Запуск от Администратора)." -ForegroundColor Yellow
         throw "Node.js installation failed with exit code $($process.ExitCode)"
@@ -127,7 +139,7 @@ if ($ghCheck -eq $null) {
     
     Write-Host "Установка gh..." -ForegroundColor Yellow
     $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", "`"$ghMsi`"", "/qn", "/norestart" -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
+    if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
         throw "Ошибка при установке GitHub CLI (код: $($process.ExitCode))."
     }
     Write-Host "[OK] GitHub CLI успешно установлен!" -ForegroundColor Green
