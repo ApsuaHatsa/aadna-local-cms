@@ -191,6 +191,9 @@ if ($authCheck -like "*Logged in to github.com*") {
     & gh auth login --web --git-protocol https
 }
 
+# Настраиваем gh как постоянный хелпер учетных данных для Git
+& gh auth setup-git
+
 # Проверка доступа к репозиторию
 Write-Host "Проверка доступа к репозиторию aadna..." -ForegroundColor Yellow
 $repoCheck = & gh repo view ApsuaHatsa/aadna --json name 2>&1
