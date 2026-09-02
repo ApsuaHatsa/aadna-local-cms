@@ -1,15 +1,19 @@
 # =============================================================================
-# 🧬 AADNA Local CMS - Windows Installer (PowerShell)
+# AADNA Local CMS - Windows Installer (PowerShell)
 # Apsny Production Inc.
 # =============================================================================
 
+$ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║        🧬 AADNA Local CMS - Установщик v1.0         ║" -ForegroundColor Cyan
-Write-Host "║        Apsny Production Inc. (API)                  ║" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+try {
+
+Write-Host "" 
+Write-Host "======================================================" -ForegroundColor Cyan
+Write-Host "   AADNA Local CMS - Installer v1.1" -ForegroundColor Cyan
+Write-Host "   Apsny Production Inc. (API)" -ForegroundColor Cyan
+Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # -----------------------------------------------------------------------------
@@ -37,6 +41,8 @@ if (!(Test-Path $tempDir)) {
     New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 }
 
+# Use TLS 1.2 for all downloads (required by GitHub/Node.js CDN)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $webClient = New-Object System.Net.WebClient
 
 # Функция обновления PATH в текущей сессии
@@ -95,13 +101,15 @@ if ($needsNode) {
     Write-Host "Скачивание Node.js (30 MB)..." -ForegroundColor Yellow
     $webClient.DownloadFile($nodeUrl, $nodeMsi)
     
-    Write-Host "Установка Node.js..." -ForegroundColor Yellow
-    $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", "`"$nodeMsi`"", "/qn", "/norestart" -Wait -PassThru
+    Write-Host "Установка Node.js (это может занять 1-2 минуты)..." -ForegroundColor Yellow
+    $msiArgs = "/i `"$nodeMsi`" /qn /norestart /l*v `"$(Join-Path $tempDir 'node-install.log')`""
+    $process = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
     if ($process.ExitCode -ne 0) {
-        Write-Error "Ошибка при установке Node.js. Установка прервана."
-        Exit 1
+        Write-Host "[!] Ошибка установки Node.js (код: $($process.ExitCode)). Лог: $(Join-Path $tempDir 'node-install.log')" -ForegroundColor Red
+        Write-Host "Попробуйте запустить установщик от имени Администратора (правый клик -> Запуск от Администратора)." -ForegroundColor Yellow
+        throw "Node.js installation failed with exit code $($process.ExitCode)"
     }
-    Write-Host "✓ Node.js успешно установлен!" -ForegroundColor Green
+    Write-Host "[OK] Node.js успешно установлен!" -ForegroundColor Green
     Refresh-Path
 }
 
@@ -288,16 +296,33 @@ if (Test-Path $tempDir) {
 }
 
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║             УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!             ║" -ForegroundColor Green
-Write-Host "╠══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║                                                      ║" -ForegroundColor Green
-Write-Host "║  Для запуска CMS:                                    ║" -ForegroundColor Green
-Write-Host "║  1. Кликните дважды по ярлыку 'AADNA CMS' на столе.  ║" -ForegroundColor Green
-Write-Host "║  2. Откроется окно админки: http://localhost:4400    ║" -ForegroundColor Green
-Write-Host "║                                                      ║" -ForegroundColor Green
-Write-Host "║  Рабочая папка проекта:                              ║" -ForegroundColor Green
-Write-Host "║  $workspace                                          ║" -ForegroundColor Green
-Write-Host "║                                                      ║" -ForegroundColor Green
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "======================================================" -ForegroundColor Green
+Write-Host "   УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА!" -ForegroundColor Green
+Write-Host "======================================================" -ForegroundColor Green
 Write-Host ""
+Write-Host "  Для запуска CMS:" -ForegroundColor Green
+Write-Host "  1. Кликните дважды по ярлыку 'AADNA CMS' на рабочем столе." -ForegroundColor Green
+Write-Host "  2. Откроется окно админки: http://localhost:4400" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Рабочая папка проекта: $workspace" -ForegroundColor Green
+Write-Host ""
+
+} catch {
+    Write-Host "" 
+    Write-Host "======================================================" -ForegroundColor Red
+    Write-Host "   ОШИБКА ВО ВРЕМЯ УСТАНОВКИ" -ForegroundColor Red
+    Write-Host "======================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Детали ошибки:" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Что делать:" -ForegroundColor Yellow
+    Write-Host "  1. Попробуйте запустить install.bat от имени Администратора" -ForegroundColor White
+    Write-Host "     (правый клик -> Запуск от имени администратора)" -ForegroundColor White
+    Write-Host "  2. Проверьте подключение к интернету" -ForegroundColor White
+    Write-Host "  3. Отправьте скриншот этого окна разработчику" -ForegroundColor White
+    Write-Host ""
+}
+
+Write-Host ""
+Read-Host "Нажмите Enter для закрытия этого окна"
