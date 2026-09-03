@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # AADNA Local CMS - Windows Installer (PowerShell)
 # Apsny Production Inc.
 # =============================================================================
@@ -242,6 +242,11 @@ if ($gitEmail -eq $null -or $gitEmail -eq "") {
     git config --global user.email $gitEmail
 }
 Write-Host "[OK] Имя Git: $gitName <$gitEmail>" -ForegroundColor Green
+
+# Добавляем все папки в исключения Git (так как скрипт работает от имени Администратора, 
+# обычный юзер потом получит ошибку "dubious ownership" при попытке коммита)
+& git config --system --add safe.directory "*"
+Write-Host "[OK] Настроены права доступа Git (safe.directory)." -ForegroundColor Green
 
 # -----------------------------------------------------------------------------
 # Этапы 8-9: Клонирование репозиториев
