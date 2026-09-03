@@ -420,6 +420,7 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       if (collection === 'results') {
         if (normalized.extra) {
           if (!normalized.extra.preview) normalized.extra.preview = {};
+          normalized.extra.preview.mode = 'manual';
           normalized.extra.preview.image = `/og/results/${previewSlug}.png`;
         }
         const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
