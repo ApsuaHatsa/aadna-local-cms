@@ -418,13 +418,15 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
 
       // Генерация OG для превью (только для results)
       if (collection === 'results') {
-        if (normalized.extra) {
-          if (!normalized.extra.preview) normalized.extra.preview = {};
-          normalized.extra.preview.mode = 'manual';
-          normalized.extra.preview.image = `/og/results/${previewSlug}.png`;
-        }
         const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, 'results');
         await generatePreview(previewSlug, finalContentObj);
+        
+        // После генерации принудительно ставим ручной режим для Zola, 
+        // чтобы шаблон использовал именно эту временную картинку.
+        if (!finalContentObj.extra) finalContentObj.extra = {};
+        if (!finalContentObj.extra.preview) finalContentObj.extra.preview = {};
+        finalContentObj.extra.preview.mode = 'manual';
+        finalContentObj.extra.preview.image = `/og/results/${previewSlug}.png`;
         
         const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
         await fs.writeFile(targetPath, fileContent);
