@@ -411,9 +411,10 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       // Режим предпросмотра: сохраняем во временный файл
       const previewSlug = `${nextSlug}.cms-tmp-preview`;
       const targetPath = path.join(colDir, `${previewSlug}.md`);
+      const previewUrl = `/${collection}/${nextSlug}-preview/`;
 
       // Подменяем путь в самом файле, чтобы у Zola не было конфликтов дубликатов
-      normalized.path = `${nextSlug}-preview/`;
+      normalized.path = previewUrl;
 
       // Генерация OG для превью (только для results)
       if (collection === 'results') {
@@ -433,7 +434,7 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
         await fs.writeFile(targetPath, fileContent);
       }
 
-      return res.json({ success: true, slug: previewSlug });
+      return res.json({ success: true, slug: previewSlug, previewUrl: previewUrl });
     }
 
     // Обычное сохранение/публикация

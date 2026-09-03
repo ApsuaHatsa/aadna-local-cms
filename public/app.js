@@ -1114,7 +1114,7 @@ async function saveEntry(actionType = 'draft') {
       window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
     }
     
-    return result.slug;
+    return result;
   } catch (error) {
     console.error(error);
     showToast(error.message, 'error');
@@ -1385,19 +1385,23 @@ async function initApp() {
       previewWindow.document.write('<html><head><title>Генерация предпросмотра...</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#e2e8f0;margin:0;"><div style="text-align:center;"><div style="font-size:24px;font-weight:bold;margin-bottom:10px;">Генерация предпросмотра...</div><div style="opacity:0.6;">Пожалуйста, подождите. Страница загрузится автоматически.</div></div></body></html>');
     }
 
-    const previewSlug = await saveEntry('preview');
-    if (previewSlug) {
+    const previewRes = await saveEntry('preview');
+    if (previewRes && previewRes.slug) {
+      const previewSlug = previewRes.slug;
       const cleanSlug = previewSlug.replace('.cms-tmp-preview', '');
       activePreviewSlug = cleanSlug;
+      
       const pathInput = document.querySelector('input[data-field-path="path"]');
       const basePath = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : cleanSlug;
+      
+      const previewUrl = previewRes.previewUrl || `/${basePath}-preview/`;
       
       // Задержка 2 сек, чтобы Zola успел пересобрать страницу
       setTimeout(() => {
         if (previewWindow) {
-          previewWindow.location.href = `http://localhost:1111/${basePath}-preview/`;
+          previewWindow.location.href = `http://localhost:1111${previewUrl}`;
         } else {
-          window.open(`http://localhost:1111/${basePath}-preview/`, '_blank');
+          window.open(`http://localhost:1111${previewUrl}`, '_blank');
         }
       }, 2000);
     } else {
