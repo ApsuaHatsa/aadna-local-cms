@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
@@ -427,6 +428,11 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
         if (!finalContentObj.extra.preview) finalContentObj.extra.preview = {};
         finalContentObj.extra.preview.mode = 'manual';
         finalContentObj.extra.preview.image = `/og/results/${previewSlug}.png`;
+        
+        // Ждём 1 сек после записи OG-картинки, чтобы Zola успел обработать 
+        // static-файл и мы записали .md сразу после — тогда Zola сделает 
+        // одну пересборку вместо двух.
+        await new Promise(r => setTimeout(r, 1000));
         
         const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
         await fs.writeFile(targetPath, fileContent);
