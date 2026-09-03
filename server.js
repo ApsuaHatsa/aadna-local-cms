@@ -621,6 +621,25 @@ app.get('/api/git-diff', (req, res) => {
   }
 });
 
+// 6.6 GET /api/check-preview - Проверка готовности страницы в Zola
+app.get('/api/check-preview', (req, res) => {
+  const previewUrl = req.query.url;
+  if (!previewUrl) return res.json({ ready: false });
+  
+  const reqUrl = `http://localhost:1111${previewUrl}`;
+  const request = http.request(reqUrl, { method: 'HEAD' }, (response) => {
+    if (response.statusCode === 200) {
+      res.json({ ready: true });
+    } else {
+      res.json({ ready: false });
+    }
+  });
+  request.on('error', () => {
+    res.json({ ready: false });
+  });
+  request.end();
+});
+
 // 7. POST /api/publish - Коммит и отправка изменений в Git
 app.post('/api/publish', (req, res) => {
   const { message, files } = req.body;

@@ -1396,14 +1396,36 @@ async function initApp() {
       
       const previewUrl = previewRes.previewUrl || `/${basePath}-preview/`;
       
-      // Задержка 2 сек, чтобы Zola успел пересобрать страницу
-      setTimeout(() => {
-        if (previewWindow) {
-          previewWindow.location.href = `http://localhost:1111${previewUrl}`;
-        } else {
-          window.open(`http://localhost:1111${previewUrl}`, '_blank');
+      if (previewWindow) {
+        previewWindow.document.body.innerHTML = '<html><head><title>Генерация предпросмотра...</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#e2e8f0;margin:0;"><div style="text-align:center;"><div style="font-size:24px;font-weight:bold;margin-bottom:10px;">Генерация предпросмотра...</div><div style="opacity:0.6;">Ожидание Zola... (сборка может занять до пары минут)</div></div></body></html>';
+      }
+
+      const checkInterval = setInterval(async () => {
+        try {
+          const checkRes = await fetch(`/api/check-preview?url=${encodeURIComponent(previewUrl)}`);
+          const checkData = await checkRes.json();
+          
+          if (checkData.ready) {
+            clearInterval(checkInterval);
+            if (previewWindow) {
+              previewWindow.location.href = `http://localhost:1111${previewUrl}`;
+            } else {
+              window.open(`http://localhost:1111${previewUrl}`, '_blank');
+            }
+          }
+        } catch (e) {
+          console.error('Ошибка проверки готовности:', e);
         }
-      }, 2000);
+      }, 3000);
+      
+      // На всякий случай добавим таймаут отмены через 5 минут
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (previewWindow) {
+          previewWindow.document.body.innerHTML = '<html><head><title>Ошибка</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#ef4444;margin:0;"><div style="text-align:center;"><div style="font-size:24px;font-weight:bold;margin-bottom:10px;">Ошибка времени ожидания</div><div style="opacity:0.8;color:#e2e8f0;">Zola не ответил в течение 5 минут. Попробуйте обновить страницу вручную.</div></div></body></html>';
+        }
+      }, 300000);
+
     } else {
       if (previewWindow) {
         previewWindow.close();
