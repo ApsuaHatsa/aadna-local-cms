@@ -43,8 +43,65 @@ const PORT = 4400;
 // Константы путей
 const AADNA_PATH = path.resolve(process.cwd(), '../aadna');
 const PAGES_CONFIG_PATH = path.join(AADNA_PATH, '.pages.yml');
+const POST_TEMPLATES_PATH = path.join(AADNA_PATH, 'data/post_templates.json');
 const RESULTS_DIR = path.join(AADNA_PATH, 'content/results');
 const MEDIA_DIR = path.join(AADNA_PATH, 'static/media/results');
+
+const DEFAULT_POST_TEMPLATES = {
+  general: {
+    telegram_top: {
+      enabled: true,
+      title: "Обсуждение результатов",
+      text: "Обсуждение результатов в чате ([https://t.me/cdna_chat](https://t.me/cdna_chat)) нашего телеграмм-канала ([https://t.me/CDNA_p](https://t.me/CDNA_p))."
+    },
+    mtdna_intro: {
+      enabled: true,
+      title: "Митохондриальная (материнская) линия",
+      text: "Митохондриальная ДНК (Мито) передается только женщинами своим детям. Это дает возможность проследить прямую женскую линию. Минус Мито в том, что она намного меньше по размеру, чем Y-хромосома, более чем в тысячу раз. Плюс в том, что в клетке много митохондрий и это повышает шанс на вероятность считывания данных. Это особенно важно для древних захоронений. К настоящему времени изучено значительно больше Мито линий древних людей, чем Y-хромосомы."
+    },
+    autosomal_intro: {
+      enabled: true,
+      title: "Аутосомы",
+      text: "Аутосомы это набор неполовых хромосом. Передаются от ближайших предков по всем линиям. У каждого следующего поколения остается только половина информации от своих родителей. Близкие совпадения определяются длиной совпадающих участков ДНК. Обозначаются эти участки как сентиморганы или сМ. С очень близкими родственники длина совпадающих участков составляет сотни и даже тысячи cM. Цифры меньше 30-40 почти невозможно определить, по какой линии родство.\n\nСуществуют несколько компаний (сайтов) которые ведут базу данных аутосомных совпадений. Самые популярные из них FTDNA, Генотек и Gedmatch.\n\nНекоторые сайты показывают вероятную национальную принадлежность. Эта информация сильно отличается от сайта к сайту.\n\nПодробнее по [ссылке](https://aadna.ru/atdna/)"
+    },
+    statistics_bottom: {
+      enabled: true,
+      title: "Статистика проекта",
+      url: "https://aadna.ru/statistics/",
+      text: "По [ссылке](https://aadna.ru/statistics/) вы можете познакомится со статистикой. Сколько всего протестировано, информация по субэтносам, гаплогруппа итд."
+    }
+  },
+  clade_templates: [
+    {
+      id: "g-l1264",
+      match: "L1264",
+      title: "G2a2 G-L1264",
+      url: "/g-l1264/",
+      description: "По ссылке подробная информация по G2a2 G-L1264 в целом. История, разные линии, филогенетическое древо."
+    },
+    {
+      id: "s9409",
+      match: "S9409",
+      title: "L1264 >> S9409",
+      url: "/s9409/",
+      description: "Описание субклада S9409"
+    },
+    {
+      id: "g2a1",
+      match: "G2a1",
+      title: "G2a1",
+      url: "/g2a1/",
+      description: "По ссылке подробная информация по G2a1 в целом. История, разные линии, филогенетическое древо."
+    },
+    {
+      id: "y87806",
+      match: "Y87806",
+      title: "L1264 >> Y87806",
+      url: "/y87806/",
+      description: "По ссылке подробная информация по субкладу Y87806."
+    }
+  ]
+};
 
 // Настройка Express
 app.use(cors());
@@ -107,6 +164,47 @@ app.post('/api/config', async (req, res) => {
     runGitCommand('git add .pages.yml');
 
     res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 1.6 GET /api/templates - Чтение глобальных шаблонов блоков
+app.get('/api/templates', async (req, res) => {
+  try {
+    if (!(await fs.pathExists(POST_TEMPLATES_PATH))) {
+      await fs.ensureDir(path.dirname(POST_TEMPLATES_PATH));
+      await fs.writeJson(POST_TEMPLATES_PATH, DEFAULT_POST_TEMPLATES, { spaces: 2 });
+      return res.json({ templates: DEFAULT_POST_TEMPLATES });
+    }
+    const data = await fs.readJson(POST_TEMPLATES_PATH);
+    res.json({ templates: data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 1.7 POST /api/templates - Сохранение глобальных шаблонов блоков
+app.post('/api/templates', async (req, res) => {
+  const { templates } = req.body;
+  if (!templates || typeof templates !== 'object') {
+    return res.status(400).json({ error: 'Некорректные данные шаблонов' });
+  }
+
+  try {
+    await fs.ensureDir(path.dirname(POST_TEMPLATES_PATH));
+    await fs.writeJson(POST_TEMPLATES_PATH, templates, { spaces: 2 });
+    
+    // Добавляем изменения в индекс Git
+    try {
+      runGitCommand('git add data/post_templates.json');
+    } catch (gitErr) {
+      console.warn('Git add warning:', gitErr.message);
+    }
+
+    res.json({ success: true, message: 'Шаблоны успешно сохранены' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });

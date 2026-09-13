@@ -104,7 +104,7 @@ function renderSidebar() {
   COLLECTIONS.forEach(col => {
     const a = document.createElement('a');
     a.href = `#/collection/${col.name}`;
-    a.className = `sidebar-nav-item ${ACTIVE_COLLECTION === col.name && window.location.hash !== '#/configuration' ? 'active' : ''}`;
+    a.className = `sidebar-nav-item ${ACTIVE_COLLECTION === col.name && window.location.hash !== '#/configuration' && window.location.hash !== '#/templates' ? 'active' : ''}`;
     
     let icon = '📁';
     if (col.name === 'results') icon = '🧬';
@@ -118,10 +118,22 @@ function renderSidebar() {
 
   // Подсвечиваем Настройки CMS если мы там
   const navConfig = document.getElementById('navItemConfig');
-  if (window.location.hash === '#/configuration') {
-    navConfig.classList.add('active');
-  } else {
-    navConfig.classList.remove('active');
+  if (navConfig) {
+    if (window.location.hash === '#/configuration') {
+      navConfig.classList.add('active');
+    } else {
+      navConfig.classList.remove('active');
+    }
+  }
+
+  // Подсвечиваем Шаблоны блоков если мы там
+  const navTemplates = document.getElementById('navItemTemplates');
+  if (navTemplates) {
+    if (window.location.hash === '#/templates') {
+      navTemplates.classList.add('active');
+    } else {
+      navTemplates.classList.remove('active');
+    }
   }
 }
 
@@ -1541,12 +1553,20 @@ async function initApp() {
     document.getElementById('listView').style.display = 'none';
     document.getElementById('editView').style.display = 'none';
     document.getElementById('configView').style.display = 'none';
+    const tmplView = document.getElementById('templatesView');
+    if (tmplView) tmplView.style.display = 'none';
 
     if (hash === '#/configuration') {
       document.getElementById('configView').style.display = 'block';
       document.querySelector('.app-sidebar').style.display = 'flex';
       renderSidebar();
       renderConfigPanel();
+    }
+    else if (hash === '#/templates') {
+      if (tmplView) tmplView.style.display = 'block';
+      document.querySelector('.app-sidebar').style.display = 'flex';
+      renderSidebar();
+      loadAndRenderTemplates();
     }
     else if (hash.startsWith('#/collection/')) {
       const parts = hash.split('/');
@@ -1661,6 +1681,7 @@ async function initApp() {
   });
 
   setupHtmlImportModalListeners();
+  setupTemplatesListeners();
   handleRoute();
 }
 
@@ -1807,6 +1828,298 @@ function setupHtmlImportModalListeners() {
 
       closeHtmlImportModal();
       showToast('HTML код очищен и встроен в пост!', 'success');
+    });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 🧩 Управление глобальными шаблонами блоков публикаций
+// -----------------------------------------------------------------------------
+let CURRENT_TEMPLATES = null;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function loadAndRenderTemplates() {
+  const statusSpan = document.getElementById('templatesStatusText');
+  if (statusSpan) statusSpan.innerText = 'Загрузка шаблонов...';
+  
+  try {
+    const res = await fetch('/api/templates');
+    if (!res.ok) throw new Error('Не удалось загрузить данные шаблонов');
+    const data = await res.json();
+    CURRENT_TEMPLATES = data.templates || {};
+
+    renderTemplatesPanel();
+    if (statusSpan) statusSpan.innerText = 'Шаблоны успешно загружены';
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, 'error');
+    if (statusSpan) statusSpan.innerText = 'Ошибка загрузки шаблонов';
+  }
+}
+
+function renderTemplatesPanel() {
+  if (!CURRENT_TEMPLATES) return;
+
+  const general = CURRENT_TEMPLATES.general || {};
+
+  // 1. Telegram
+  const tg = general.telegram_top || {};
+  const tgEnabled = document.getElementById('tmplTelegramEnabled');
+  const tgTitle = document.getElementById('tmplTelegramTitle');
+  const tgText = document.getElementById('tmplTelegramText');
+  if (tgEnabled) tgEnabled.checked = tg.enabled !== false;
+  if (tgTitle) tgTitle.value = tg.title || 'Обсуждение результатов';
+  if (tgText) tgText.value = tg.text || '';
+
+  // 2. mtDNA
+  const mt = general.mtdna_intro || {};
+  const mtEnabled = document.getElementById('tmplMtdnaEnabled');
+  const mtTitle = document.getElementById('tmplMtdnaTitle');
+  const mtText = document.getElementById('tmplMtdnaText');
+  if (mtEnabled) mtEnabled.checked = mt.enabled !== false;
+  if (mtTitle) mtTitle.value = mt.title || 'Митохондриальная (материнская) линия';
+  if (mtText) mtText.value = mt.text || '';
+
+  // 3. atDNA
+  const at = general.autosomal_intro || {};
+  const atEnabled = document.getElementById('tmplAutosomalEnabled');
+  const atTitle = document.getElementById('tmplAutosomalTitle');
+  const atText = document.getElementById('tmplAutosomalText');
+  if (atEnabled) atEnabled.checked = at.enabled !== false;
+  if (atTitle) atTitle.value = at.title || 'Аутосомы';
+  if (atText) atText.value = at.text || '';
+
+  // 4. Statistics
+  const st = general.statistics_bottom || {};
+  const stEnabled = document.getElementById('tmplStatisticsEnabled');
+  const stTitle = document.getElementById('tmplStatisticsTitle');
+  const stUrl = document.getElementById('tmplStatisticsUrl');
+  const stText = document.getElementById('tmplStatisticsText');
+  if (stEnabled) stEnabled.checked = st.enabled !== false;
+  if (stTitle) stTitle.value = st.title || 'Статистика проекта';
+  if (stUrl) stUrl.value = st.url || 'https://aadna.ru/statistics/';
+  if (stText) stText.value = st.text || '';
+
+  // Clade templates
+  renderCladeTemplatesList();
+}
+
+function renderCladeTemplatesList() {
+  const container = document.getElementById('cladeTemplatesContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const clades = CURRENT_TEMPLATES.clade_templates || [];
+
+  if (clades.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--color-muted); background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: 8px;">
+        Нет добавленных заготовок субкладов. Нажмите «＋ Добавить заготовку», чтобы создать новую.
+      </div>
+    `;
+    return;
+  }
+
+  clades.forEach((clade, idx) => {
+    const item = document.createElement('div');
+    item.className = 'clade-card-item';
+    item.dataset.index = idx;
+
+    item.innerHTML = `
+      <div class="clade-card-item-header">
+        <span class="clade-card-badge">🏷️ Снип: ${escapeHtml(clade.match || 'Новый')}</span>
+        <button type="button" class="btn btn-sm btn-danger delete-clade-btn" data-index="${idx}" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">
+          🗑️ Удалить
+        </button>
+      </div>
+      <div class="clade-grid-fields">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 0.75rem;">Снип для поиска (match)</label>
+          <input type="text" class="clade-input-match" data-index="${idx}" value="${escapeHtml(clade.match || '')}" placeholder="например L1264">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 0.75rem;">Заголовок карточки</label>
+          <input type="text" class="clade-input-title" data-index="${idx}" value="${escapeHtml(clade.title || '')}" placeholder="например G2a2 G-L1264">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 0.75rem;">Ссылка на статью (URL)</label>
+          <input type="text" class="clade-input-url" data-index="${idx}" value="${escapeHtml(clade.url || '')}" placeholder="/g-l1264/">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label style="font-size: 0.75rem;">Описание / текст статьи</label>
+        <textarea class="clade-input-desc" data-index="${idx}" rows="2" placeholder="Краткое описание субклада...">${escapeHtml(clade.description || '')}</textarea>
+      </div>
+    `;
+
+    container.appendChild(item);
+  });
+
+  // Attach delete events
+  container.querySelectorAll('.delete-clade-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.currentTarget.dataset.index, 10);
+      const title = CURRENT_TEMPLATES.clade_templates[index]?.title || 'Без названия';
+      if (confirm(`Удалить заготовку субклада "${title}"?`)) {
+        CURRENT_TEMPLATES.clade_templates.splice(index, 1);
+        renderCladeTemplatesList();
+      }
+    });
+  });
+
+  // Attach input sync events
+  container.querySelectorAll('.clade-input-match').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (CURRENT_TEMPLATES.clade_templates[idx]) {
+        CURRENT_TEMPLATES.clade_templates[idx].match = e.target.value.trim();
+        const badge = e.target.closest('.clade-card-item')?.querySelector('.clade-card-badge');
+        if (badge) badge.innerText = `🏷️ Снип: ${e.target.value.trim() || 'Новый'}`;
+      }
+    });
+  });
+
+  container.querySelectorAll('.clade-input-title').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (CURRENT_TEMPLATES.clade_templates[idx]) {
+        CURRENT_TEMPLATES.clade_templates[idx].title = e.target.value;
+      }
+    });
+  });
+
+  container.querySelectorAll('.clade-input-url').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (CURRENT_TEMPLATES.clade_templates[idx]) {
+        CURRENT_TEMPLATES.clade_templates[idx].url = e.target.value.trim();
+      }
+    });
+  });
+
+  container.querySelectorAll('.clade-input-desc').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (CURRENT_TEMPLATES.clade_templates[idx]) {
+        CURRENT_TEMPLATES.clade_templates[idx].description = e.target.value;
+      }
+    });
+  });
+}
+
+async function saveTemplatesData() {
+  if (!CURRENT_TEMPLATES) CURRENT_TEMPLATES = { general: {}, clade_templates: [] };
+
+  // Собираем общие шаблоны
+  CURRENT_TEMPLATES.general = {
+    telegram_top: {
+      enabled: document.getElementById('tmplTelegramEnabled')?.checked ?? true,
+      title: document.getElementById('tmplTelegramTitle')?.value || 'Обсуждение результатов',
+      text: document.getElementById('tmplTelegramText')?.value || ''
+    },
+    mtdna_intro: {
+      enabled: document.getElementById('tmplMtdnaEnabled')?.checked ?? true,
+      title: document.getElementById('tmplMtdnaTitle')?.value || 'Митохондриальная (материнская) линия',
+      text: document.getElementById('tmplMtdnaText')?.value || ''
+    },
+    autosomal_intro: {
+      enabled: document.getElementById('tmplAutosomalEnabled')?.checked ?? true,
+      title: document.getElementById('tmplAutosomalTitle')?.value || 'Аутосомы',
+      text: document.getElementById('tmplAutosomalText')?.value || ''
+    },
+    statistics_bottom: {
+      enabled: document.getElementById('tmplStatisticsEnabled')?.checked ?? true,
+      title: document.getElementById('tmplStatisticsTitle')?.value || 'Статистика проекта',
+      url: document.getElementById('tmplStatisticsUrl')?.value || 'https://aadna.ru/statistics/',
+      text: document.getElementById('tmplStatisticsText')?.value || ''
+    }
+  };
+
+  const statusSpan = document.getElementById('templatesStatusText');
+  if (statusSpan) statusSpan.innerText = 'Сохранение шаблонов...';
+  showToast('Сохранение шаблонов...', 'info');
+
+  try {
+    const res = await fetch('/api/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templates: CURRENT_TEMPLATES })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Ошибка при сохранении');
+    }
+
+    const result = await res.json();
+    showToast(result.message || 'Шаблоны успешно сохранены!', 'success');
+    if (statusSpan) statusSpan.innerText = 'Все шаблоны сохранены в data/post_templates.json';
+    updateGitStatus();
+  } catch (err) {
+    console.error(err);
+    showToast(`Ошибка: ${err.message}`, 'error');
+    if (statusSpan) statusSpan.innerText = `Ошибка сохранения: ${err.message}`;
+  }
+}
+
+function setupTemplatesListeners() {
+  const tabBtnGeneral = document.getElementById('tabBtnGeneral');
+  const tabBtnClades = document.getElementById('tabBtnClades');
+  const tabContentGeneral = document.getElementById('tabContentGeneral');
+  const tabContentClades = document.getElementById('tabContentClades');
+
+  if (tabBtnGeneral && tabBtnClades) {
+    tabBtnGeneral.addEventListener('click', () => {
+      tabBtnGeneral.classList.add('active');
+      tabBtnClades.classList.remove('active');
+      if (tabContentGeneral) tabContentGeneral.style.display = 'block';
+      if (tabContentClades) tabContentClades.style.display = 'none';
+    });
+
+    tabBtnClades.addEventListener('click', () => {
+      tabBtnClades.classList.add('active');
+      tabBtnGeneral.classList.remove('active');
+      if (tabContentGeneral) tabContentGeneral.style.display = 'none';
+      if (tabContentClades) tabContentClades.style.display = 'block';
+    });
+  }
+
+  const saveBtn = document.getElementById('saveTemplatesBtn');
+  const saveBottomBtn = document.getElementById('saveTemplatesBottomBtn');
+  if (saveBtn) saveBtn.addEventListener('click', saveTemplatesData);
+  if (saveBottomBtn) saveBottomBtn.addEventListener('click', saveTemplatesData);
+
+  const reloadBtn = document.getElementById('reloadTemplatesBtn');
+  if (reloadBtn) reloadBtn.addEventListener('click', loadAndRenderTemplates);
+
+  const addCladeBtn = document.getElementById('addCladeTemplateBtn');
+  if (addCladeBtn) {
+    addCladeBtn.addEventListener('click', () => {
+      if (!CURRENT_TEMPLATES) CURRENT_TEMPLATES = { general: {}, clade_templates: [] };
+      if (!CURRENT_TEMPLATES.clade_templates) CURRENT_TEMPLATES.clade_templates = [];
+      CURRENT_TEMPLATES.clade_templates.push({
+        id: `clade_${Date.now()}`,
+        match: '',
+        title: '',
+        url: '',
+        description: ''
+      });
+      renderCladeTemplatesList();
+      
+      const container = document.getElementById('cladeTemplatesContainer');
+      if (container && container.lastElementChild) {
+        container.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const matchInput = container.lastElementChild.querySelector('.clade-input-match');
+        if (matchInput) matchInput.focus();
+      }
     });
   }
 }

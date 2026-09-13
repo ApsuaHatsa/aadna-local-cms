@@ -32,6 +32,10 @@
       <div style="flex: 1;"></div>
       
       <div class="sidebar-footer">
+        <a href="#/templates" class="sidebar-nav-item" id="navItemTemplates">
+          <span class="icon">🧩</span>
+          <span class="label">Шаблоны блоков</span>
+        </a>
         <a href="#/configuration" class="sidebar-nav-item" id="navItemConfig">
           <span class="icon">⚙️</span>
           <span class="label">Настройки CMS</span>
@@ -140,6 +144,178 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 4. РЕЖИМ ШАБЛОНОВ БЛОКОВ (templates-view)  -->
+        <!-- ========================================== -->
+        <div id="templatesView" class="panel" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h2 style="font-size: 1.4rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                <span>🧩</span> Шаблоны блоков публикаций
+              </h2>
+              <p style="font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem;">
+                Централизованные шаблоны отображаются во всех современных постах. Любое изменение здесь обновляет все публикации на сайте.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+              <button type="button" class="btn" id="reloadTemplatesBtn">🔄 Обновить</button>
+              <button type="button" class="btn btn-primary" id="saveTemplatesBtn">💾 Сохранить шаблоны</button>
+            </div>
+          </div>
+
+          <!-- Вкладки категорий шаблонов -->
+          <div class="templates-tabs-nav">
+            <button type="button" class="templates-tab-btn active" id="tabBtnGeneral">
+              <span>📌</span> Общие шаблоны
+            </button>
+            <button type="button" class="templates-tab-btn" id="tabBtnClades">
+              <span>🌳</span> Заготовки по гаплогруппам
+            </button>
+          </div>
+
+          <!-- Вкладка 1: Общие системные шаблоны -->
+          <div id="tabContentGeneral" class="templates-tab-content">
+            <div class="templates-grid">
+              
+              <!-- 1. Telegram баннер -->
+              <div class="template-card">
+                <div class="template-card-header">
+                  <div class="template-card-title-group">
+                    <span class="template-card-icon">💬</span>
+                    <div>
+                      <h3 class="template-card-title">Обсуждение в Telegram (верх поста)</h3>
+                      <span class="template-card-desc">Баннер под карточкой сводки с ссылками на чат и канал</span>
+                    </div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="tmplTelegramEnabled">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="template-card-body">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="tmplTelegramTitle">Заголовок / Название</label>
+                    <input type="text" id="tmplTelegramTitle" placeholder="Обсуждение результатов">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tmplTelegramText">Текст баннера (Markdown / ссылки)</label>
+                    <textarea id="tmplTelegramText" rows="3" placeholder="Текст баннера со ссылками..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Митохондриальная линия -->
+              <div class="template-card">
+                <div class="template-card-header">
+                  <div class="template-card-title-group">
+                    <span class="template-card-icon">🧬</span>
+                    <div>
+                      <h3 class="template-card-title">Митохондриальная (материнская) линия</h3>
+                      <span class="template-card-desc">Вводный образовательный текст перед персональными данными mtDNA</span>
+                    </div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="tmplMtdnaEnabled">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="template-card-body">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="tmplMtdnaTitle">Заголовок секции</label>
+                    <input type="text" id="tmplMtdnaTitle" placeholder="Митохондриальная (материнская) линия">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tmplMtdnaText">Вводный текст</label>
+                    <textarea id="tmplMtdnaText" rows="5" placeholder="Вводный текст о митохондриях..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. Аутосомы -->
+              <div class="template-card">
+                <div class="template-card-header">
+                  <div class="template-card-title-group">
+                    <span class="template-card-icon">🧬</span>
+                    <div>
+                      <h3 class="template-card-title">Аутосомы (atDNA)</h3>
+                      <span class="template-card-desc">Вводный образовательный текст о сентиморганах и компаниях тестирования</span>
+                    </div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="tmplAutosomalEnabled">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="template-card-body">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="tmplAutosomalTitle">Заголовок секции</label>
+                    <input type="text" id="tmplAutosomalTitle" placeholder="Аутосомы">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tmplAutosomalText">Вводный текст (Markdown / ссылки)</label>
+                    <textarea id="tmplAutosomalText" rows="7" placeholder="Пояснительный текст об аутосомах..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. Статистика проекта -->
+              <div class="template-card">
+                <div class="template-card-header">
+                  <div class="template-card-title-group">
+                    <span class="template-card-icon">📊</span>
+                    <div>
+                      <h3 class="template-card-title">Статистика проекта (подвал поста)</h3>
+                      <span class="template-card-desc">Баннер в конце контента с ссылкой на общую статистику</span>
+                    </div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="tmplStatisticsEnabled">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="template-card-body">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="tmplStatisticsTitle">Заголовок</label>
+                    <input type="text" id="tmplStatisticsTitle" placeholder="Статистика проекта">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="tmplStatisticsUrl">Ссылка перехода</label>
+                    <input type="text" id="tmplStatisticsUrl" placeholder="https://aadna.ru/statistics/">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tmplStatisticsText">Текст описания</label>
+                    <textarea id="tmplStatisticsText" rows="3" placeholder="Описание раздела статистики..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Вкладка 2: Заготовки по гаплогруппам и субкладам -->
+          <div id="tabContentClades" class="templates-tab-content" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+              <div>
+                <h3 style="font-size: 1.1rem; font-weight: 600; color: #fff;">Реестр заготовок субкладов и статей</h3>
+                <p style="font-size: 0.8rem; color: var(--color-muted); margin-top: 0.2rem;">
+                  Если субклад или гаплогруппа поста содержит указанный снип, в посте автоматически выводится карточка со ссылкой на статью.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" id="addCladeTemplateBtn">＋ Добавить заготовку</button>
+            </div>
+
+            <div id="cladeTemplatesContainer" class="clade-templates-list">
+              <!-- Карточки заготовок генерируются JS-ом -->
+            </div>
+          </div>
+
+          <div class="button-row" style="margin-top: 2rem; border-top: 1px solid var(--color-border); padding-top: 1.25rem;">
+            <span id="templatesStatusText" style="font-size: 0.85rem; color: var(--color-muted);"></span>
+            <span style="flex: 1;"></span>
+            <button type="button" class="btn btn-primary" id="saveTemplatesBottomBtn">💾 Сохранить все шаблоны</button>
           </div>
         </div>
 
