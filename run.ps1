@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # AADNA Local CMS - Runner (PowerShell)
 # Apsny Production Inc. (API)
 # =============================================================================
@@ -39,6 +39,10 @@ try {
             } else {
                 Write-Host "[!] Найдено новых коммитов ($behindCms). Обновляю CMS..." -ForegroundColor Yellow
                 & git pull --rebase origin main
+                if (-not (Test-Path (Join-Path $cmsDir "node_modules\puppeteer-core"))) {
+                    Write-Host "[!] Установка необходимых модулей..." -ForegroundColor Yellow
+                    & npm install --no-audit --no-fund
+                }
             }
         } else {
             Write-Host "[OK] CMS в актуальном состоянии." -ForegroundColor Green

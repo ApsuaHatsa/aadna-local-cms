@@ -21,6 +21,10 @@ if git fetch origin main >/dev/null 2>&1; then
     else
       echo "[!] Найдено новых коммитов для CMS: $BEHIND_CMS. Обновляю..."
       git pull --rebase origin main
+      if [ ! -d "node_modules/puppeteer-core" ]; then
+        echo "[!] Установка необходимых модулей npm..."
+        npm install --no-audit --no-fund
+      fi
     fi
   else
     echo "[✓] CMS обновлена."

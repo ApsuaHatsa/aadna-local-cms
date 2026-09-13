@@ -33,6 +33,7 @@ import { syncSnpPath } from './lib/snp.js';
 import { generatePreview } from './lib/preview.js';
 import { getStatus, publish, runGitCommand } from './lib/git.js';
 import { slugifyAadnaTitle } from './lib/slugify.js';
+import { captureYtreeScreenshotLocal } from './lib/ytree-screenshot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -382,46 +383,70 @@ async function fetchYtreeScreenshot(clade, slug) {
     const cleanClade = clade.replace(/[^a-zA-Z0-9-]/g, '');
     const filename = 'ytree_' + cleanClade + '_' + theme + '.png';
     const targetPath = path.join(mediaDir, filename);
-    const url = `${baseUrl}/api/screenshot?clade=${encodeURIComponent(clade)}${theme === 'dark' ? '&theme=dark' : ''}`;
+    const cloudUrl = `${baseUrl}/api/screenshot?clade=${encodeURIComponent(clade)}${theme === 'dark' ? '&theme=dark' : ''}`;
 
+    if (await fs.pathExists(targetPath)) {
+      successCount++;
+      if (!treeUrl) {
+        try {
+          const headRes = await fetch(cloudUrl, { method: 'HEAD' });
+          if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
+        } catch (e) {}
+      }
+      continue;
+    }
+
+    console.log(`Fetching YTree screenshot for ${clade} (${theme} theme)...`);
+    let buffer = null;
+
+    // 1. Приоритет: локальный рендеринг через системный браузер (быстро: 5-7 сек)
     try {
-      if (await fs.pathExists(targetPath)) {
-        successCount++;
-        if (!treeUrl) {
-          try {
-            const headRes = await fetch(url, { method: 'HEAD' });
-            if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
-          } catch (e) {
-            // ignore HEAD error for locally cached screenshot
-          }
+      const localRes = await captureYtreeScreenshotLocal(clade, theme);
+      if (localRes && localRes.buffer) {
+        buffer = localRes.buffer;
+        if (!treeUrl && localRes.treeUrl) treeUrl = localRes.treeUrl;
+        console.log(`[Local YTree] Rendered locally in high quality for ${clade} (${theme})`);
+      }
+    } catch (localErr) {
+      console.warn(`[Local YTree] Local render skipped (${localErr.message}), falling back to cloud API...`);
+    }
+
+    // 2. Фоллбек: облачный API ytree-api.apsny.dev
+    if (!buffer) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        const response = await fetch(cloudUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const json = await response.json();
+          throw new Error(json.error || 'Branch not found on the tree');
         }
-        continue;
+
+        if (!treeUrl) treeUrl = response.headers.get('x-tree-url') || '';
+        const arrayBuffer = await response.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+        console.log(`[Cloud YTree] Fetched from cloud API for ${clade} (${theme})`);
+      } catch (cloudErr) {
+        console.error(`Failed to fetch YTree screenshot (${theme}):`, cloudErr.message);
       }
+    }
 
-      console.log('Fetching YTree screenshot for ' + clade + ' (' + theme + ' theme)...');
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90000);
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const json = await response.json();
-        throw new Error(json.error || 'Branch not found on the tree');
-      }
-
-      if (!treeUrl) treeUrl = response.headers.get('x-tree-url') || '';
-
-      const arrayBuffer = await response.arrayBuffer();
-      await fs.writeFile(targetPath, Buffer.from(arrayBuffer));
+    if (buffer) {
+      await fs.writeFile(targetPath, buffer);
       console.log('Successfully saved ' + filename);
       successCount++;
-    } catch (err) {
-      console.error('Failed to fetch YTree screenshot (' + theme + '):', err.message);
     }
   }
+
+  if (!treeUrl) {
+    treeUrl = `https://ytree.apsny.dev/${encodeURIComponent(clade)}?utm_source=aadna.ru&utm_medium=social&utm_campaign=tree_share&utm_content=${encodeURIComponent(clade)}`;
+  }
+
   return { success: successCount === 2, link: treeUrl };
 }
 
@@ -814,7 +839,7 @@ function startServer(port) {
   const server = app.listen(port, () => {
     console.log(`\n==================================================`);
     console.log(`🧬 AADNA Local Admin running at: http://localhost:${port}`);
-    console.log(`🖼️  Screenshot API: ${process.env.YTREE_API_URL || 'https://ytree-api.apsny.dev'}`);
+    console.log(`🖼️  Screenshot Engine: Hybrid (Local Chrome/Edge + Cloud Failover)`);
     console.log(`Working with repository: ${AADNA_PATH}`);
     console.log(`==================================================\n`);
     
