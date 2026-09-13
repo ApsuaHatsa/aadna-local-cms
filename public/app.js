@@ -152,6 +152,8 @@ function buildTableHeader() {
   const fieldLabels = {
     'title': 'Заголовок',
     'date': 'Дата',
+    'updated': 'Обновлено',
+    'extra.preview.image': 'Превью',
     'extra.surname': 'Фамилия',
     'extra.result_type': 'Тип',
     'extra.y_haplogroup': 'Гаплогруппа',
@@ -193,7 +195,11 @@ function renderEntriesTable(entries) {
       if (Array.isArray(val)) {
         val = val.join(', ');
       }
-      if (f === 'title' || f === 'extra.surname') {
+      if (f === 'extra.preview.image') {
+        cellsHtml += val 
+          ? `<td><img src="${val}" style="width: 48px; height: 27px; object-fit: cover; border-radius: 4px; border: 1px solid var(--color-border);" alt="Превью" /></td>`
+          : `<td><span style="color: var(--color-muted); font-size: 0.8rem;">-</span></td>`;
+      } else if (f === 'title' || f === 'extra.surname') {
         cellsHtml += `<td style="font-weight: 600; color: white;">${val || entry.slug}</td>`;
       } else if (f === 'extra.y_haplogroup') {
         cellsHtml += `<td><span style="font-weight: bold; color: var(--color-accent); font-family: monospace;">${val}</span></td>`;
@@ -563,7 +569,10 @@ async function handleImageUpload(file, hiddenInput, previewDiv) {
   
   try {
     const pathInput = document.querySelector('input[data-field-path="path"]');
-    const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+    let slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+    if (!slug && ORIGINAL_SLUG) {
+      slug = ORIGINAL_SLUG.replace(/^\/+/, '').replace(/\/+$/, '');
+    }
     const collection = ACTIVE_COLLECTION;
 
     const formData = new FormData();
@@ -856,7 +865,10 @@ function populateForm(data) {
             const formData = new FormData();
             formData.append('image', blob);
             const pathInput = document.querySelector('input[data-field-path="path"]');
-            const slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+            let slug = pathInput ? pathInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '') : '';
+            if (!slug && ORIGINAL_SLUG) {
+              slug = ORIGINAL_SLUG.replace(/^\/+/, '').replace(/\/+$/, '');
+            }
             const uploadUrl = slug ? `/api/upload?slug=${encodeURIComponent(slug)}&collection=${ACTIVE_COLLECTION}` : `/api/upload?collection=${ACTIVE_COLLECTION}`;
             
             const response = await fetch(uploadUrl, { method: 'POST', body: formData });
@@ -1585,7 +1597,14 @@ async function initApp() {
           };
         } else if (ACTIVE_COLLECTION === 'articles') {
           defaults.template = 'article.html';
-        } else if (ACTIVE_COLLECTION === 'projects' || ACTIVE_COLLECTION === 'pages') {
+        } else if (ACTIVE_COLLECTION === 'projects') {
+          defaults.template = 'article.html';
+          defaults.draft = false;
+          defaults.authors = ['CircassianDNA'];
+          defaults.extra = {
+            preview: { mode: 'manual', image: '' }
+          };
+        } else if (ACTIVE_COLLECTION === 'pages') {
           defaults.template = 'page.html';
         }
 

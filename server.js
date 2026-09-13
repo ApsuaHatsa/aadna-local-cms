@@ -131,8 +131,8 @@ async function getCollectionSettings(collectionName) {
 function getEntrySlug(data, collectionConfig) {
   const template = collectionConfig.filename?.template || '{path}.md';
   
-  if (template === '{path}.md' && data.path) {
-    return data.path.replace(/\/+$/, '').trim();
+  if ((template === '{path}.md' || data.path) && data.path) {
+    return data.path.replace(/^\/+/, '').replace(/\/+$/, '').trim();
   }
   
   const primaryField = collectionConfig.view?.primary || 'title';
@@ -142,6 +142,19 @@ function getEntrySlug(data, collectionConfig) {
   }
   
   return 'untitled';
+}
+
+// Извлечение markdown body из объекта перед сериализацией в YAML frontmatter
+function extractMarkdownBody(contentObj) {
+  let markdownBody = '';
+  if (contentObj.body !== undefined) {
+    markdownBody = contentObj.body || '';
+    delete contentObj.body;
+  } else if (contentObj.content !== undefined) {
+    markdownBody = contentObj.content || '';
+    delete contentObj.content;
+  }
+  return markdownBody;
 }
 
 // 2. GET /api/collections/:collection/entries - Список записей конкретной коллекции
@@ -415,7 +428,7 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       const previewUrl = `/${collection}/${nextSlug}-preview/`;
 
       // Подменяем путь в самом файле, чтобы у Zola не было конфликтов дубликатов
-      normalized.path = previewUrl;
+      normalized.path = `${collection}/${nextSlug}-preview/`;
 
       // Генерация OG для превью (только для results)
       if (collection === 'results') {
@@ -434,12 +447,14 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
         // одну пересборку вместо двух.
         await new Promise(r => setTimeout(r, 1000));
         
-        const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
+        const markdownBody = extractMarkdownBody(finalContentObj);
+        const fileContent = matter.stringify(markdownBody, finalContentObj, { lineWidth: -1 });
         await fs.writeFile(targetPath, fileContent);
       } else {
         // Для других коллекций
         const finalContentObj = await relocateAadnaResultMedia(nextSlug, normalized, collection);
-        const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
+        const markdownBody = extractMarkdownBody(finalContentObj);
+        const fileContent = matter.stringify(markdownBody, finalContentObj, { lineWidth: -1 });
         await fs.writeFile(targetPath, fileContent);
       }
 
@@ -457,7 +472,8 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       await generatePreview(nextSlug, finalContentObj);
     }
 
-    const fileContent = matter.stringify('', finalContentObj, { lineWidth: -1 });
+    const markdownBody = extractMarkdownBody(finalContentObj);
+    const fileContent = matter.stringify(markdownBody, finalContentObj, { lineWidth: -1 });
     await fs.writeFile(targetPath, fileContent);
 
     // Если имя файла изменилось, удаляем старый файл
