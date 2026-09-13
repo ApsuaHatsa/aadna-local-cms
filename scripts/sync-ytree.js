@@ -24,24 +24,30 @@ async function fetchYtreeScreenshot(clade, slug) {
   let successCount = 0;
   let treeUrl = '';
 
+  const baseUrl = (process.env.YTREE_API_URL || 'https://ytree-api.apsny.dev').replace(/\/$/, '');
+
   for (const theme of themes) {
     const filename = `ytree_${clade.replace(/[^a-zA-Z0-9-]/g, '')}_${theme}.png`;
     const targetPath = path.join(mediaDir, filename);
-    const url = `https://ytree-api.apsny.dev/api/screenshot?clade=${clade}${theme === 'dark' ? '&theme=dark' : ''}`;
+    const url = `${baseUrl}/api/screenshot?clade=${encodeURIComponent(clade)}${theme === 'dark' ? '&theme=dark' : ''}`;
 
     try {
       if (await fs.pathExists(targetPath)) {
         successCount++;
         if (!treeUrl) {
-          const headRes = await fetch(url, { method: 'HEAD' });
-          if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
+          try {
+            const headRes = await fetch(url, { method: 'HEAD' });
+            if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
+          } catch (e) {
+            // ignore HEAD error
+          }
         }
         continue;
       }
 
       console.log(`  - Fetching YTree screenshot (${theme} theme)...`);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 90000);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 

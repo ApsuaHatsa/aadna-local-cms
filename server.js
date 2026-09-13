@@ -376,26 +376,31 @@ async function fetchYtreeScreenshot(clade, slug) {
 
   let successCount = 0;
   let treeUrl = '';
+  const baseUrl = (process.env.YTREE_API_URL || 'https://ytree-api.apsny.dev').replace(/\/$/, '');
 
   for (const theme of themes) {
     const cleanClade = clade.replace(/[^a-zA-Z0-9-]/g, '');
     const filename = 'ytree_' + cleanClade + '_' + theme + '.png';
     const targetPath = path.join(mediaDir, filename);
-    const url = 'http://127.0.0.1:3005/api/screenshot?clade=' + clade + (theme === 'dark' ? '&theme=dark' : '');
+    const url = `${baseUrl}/api/screenshot?clade=${encodeURIComponent(clade)}${theme === 'dark' ? '&theme=dark' : ''}`;
 
     try {
       if (await fs.pathExists(targetPath)) {
         successCount++;
         if (!treeUrl) {
-          const headRes = await fetch(url, { method: 'HEAD' });
-          if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
+          try {
+            const headRes = await fetch(url, { method: 'HEAD' });
+            if (headRes.ok) treeUrl = headRes.headers.get('x-tree-url') || '';
+          } catch (e) {
+            // ignore HEAD error for locally cached screenshot
+          }
         }
         continue;
       }
 
       console.log('Fetching YTree screenshot for ' + clade + ' (' + theme + ' theme)...');
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 600000);
+      const timeout = setTimeout(() => controller.abort(), 90000);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
@@ -786,16 +791,18 @@ app.post('/api/publish', (req, res) => {
 
 // Запуск сервера
 function startServer(port) {
-  // Launch Screenshot API
-  const screenshotApi = spawn('node', ['index.js'], {
-    cwd: path.join(__dirname, 'screenshot-api'),
-    stdio: 'ignore',
-    detached: false
-  });
+  let screenshotApi = null;
+  if (process.env.SPAWN_LOCAL_SCREENSHOT_API === 'true') {
+    screenshotApi = spawn('node', ['index.js'], {
+      cwd: path.join(__dirname, 'screenshot-api'),
+      stdio: 'ignore',
+      detached: false
+    });
 
-  screenshotApi.on('error', (err) => {
-    console.error('Failed to start Screenshot API:', err);
-  });
+    screenshotApi.on('error', (err) => {
+      console.error('Failed to start Screenshot API:', err);
+    });
+  }
 
   const cleanupApi = () => {
     if (screenshotApi) screenshotApi.kill();
@@ -807,7 +814,7 @@ function startServer(port) {
   const server = app.listen(port, () => {
     console.log(`\n==================================================`);
     console.log(`🧬 AADNA Local Admin running at: http://localhost:${port}`);
-    console.log(`🖼️  Screenshot API running at: http://localhost:3005`);
+    console.log(`🖼️  Screenshot API: ${process.env.YTREE_API_URL || 'https://ytree-api.apsny.dev'}`);
     console.log(`Working with repository: ${AADNA_PATH}`);
     console.log(`==================================================\n`);
     
