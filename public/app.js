@@ -1027,6 +1027,20 @@ function serializeForm() {
     else if (control.type === 'number') {
       val = control.value ? Number(control.value) : undefined;
     }
+    else if (control.type === 'datetime-local') {
+      if (control.value) {
+        let dt = control.value;
+        if (dt.endsWith('T00:00') || dt.endsWith('T00:00:00')) {
+          val = dt.slice(0, 10);
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)) {
+          val = `${dt}:00`;
+        } else {
+          val = dt;
+        }
+      } else {
+        val = undefined;
+      }
+    }
     else {
       val = control.value;
     }

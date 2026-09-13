@@ -450,6 +450,18 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       snpToSync = normRes.snpToSync;
     }
 
+    // Нормализация дат (Zola 0.19 строго требует секунды в RFC3339 или YYYY-MM-DD)
+    ['date', 'updated'].forEach(f => {
+      if (typeof normalized[f] === 'string') {
+        const val = normalized[f].trim();
+        if (val.endsWith('T00:00') || val.endsWith('T00:00:00')) {
+          normalized[f] = val.slice(0, 10);
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) {
+          normalized[f] = `${val}:00`;
+        }
+      }
+    });
+
     // Определение слага
     let nextSlug = getEntrySlug(normalized, colSettings);
     
