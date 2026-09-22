@@ -513,7 +513,12 @@ app.post('/api/collections/:collection/entry', async (req, res) => {
       try {
         const customClade = normalized.extra?.details_y?.ytree_clade;
         const defaultClade = normalized.extra?.y_subclade;
-        const targetClade = (customClade && customClade.trim()) ? customClade.trim() : defaultClade;
+
+        // Для legacy-постов (которые не имели YTree) генерируем только если явно задан ytree_clade
+        const isLegacyPost = existingContent && !existingContent.extra?.details_y?.ytree_tree && !existingContent.extra?.details_y?.ytree_clade;
+        const targetClade = (customClade && customClade.trim())
+          ? customClade.trim()
+          : (!isLegacyPost ? defaultClade : null);
 
         if (targetClade) {
           const clade = targetClade.replace(/[^a-zA-Z0-9-]/g, '');

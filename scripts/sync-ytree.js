@@ -125,9 +125,18 @@ async function main() {
     const raw = await fs.readFile(filePath, 'utf-8');
     const parsed = matter(raw);
 
-    const customClade = parsed.data.extra?.details_y?.ytree_clade;
-    const defaultClade = parsed.data.extra?.y_subclade;
-    const ySubclade = (customClade && customClade.trim()) ? customClade.trim() : defaultClade;
+    const hasExistingYtree = !!(parsed.data.extra?.details_y?.ytree_tree);
+    const customClade = parsed.data.extra?.details_y?.ytree_clade?.trim();
+
+    // YTree предназначен только для новых постов (где есть ytree_clade или ytree_tree).
+    // Старые (legacy) посты строго игнорируем!
+    if (!hasExistingYtree && !customClade) {
+      skipped++;
+      continue;
+    }
+
+    const defaultClade = parsed.data.extra?.y_subclade?.trim();
+    const ySubclade = customClade || defaultClade;
 
     if (!ySubclade) {
       skipped++;
