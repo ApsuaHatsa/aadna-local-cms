@@ -28,7 +28,7 @@ import { execSync, exec, spawn } from 'child_process';
 
 // Импорт библиотек автоматизации
 import { normalizeAadnaContent } from './lib/normalize.js';
-import { saveUploadedImage, relocateAadnaResultMedia } from './lib/media.js';
+import { saveUploadedImage, relocateAadnaResultMedia, getMediaPaths, getMediaLibrary, deleteMediaFile, invalidateMediaCache } from './lib/media.js';
 import { syncSnpPath } from './lib/snp.js';
 import { generatePreview } from './lib/preview.js';
 import { getStatus, publish, runGitCommand } from './lib/git.js';
@@ -364,8 +364,42 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     await fs.writeFile(targetPath, req.file.buffer);
 
     res.json({ url: `/media/${colName}/${uniqueName}` });
+    invalidateMediaCache();
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4.5 GET /api/media - Получение каталога всех медиафайлов с метаданными и связями
+app.get('/api/media', async (req, res) => {
+  const forceRefresh = req.query.refresh === 'true';
+  try {
+    const data = await getMediaLibrary(AADNA_PATH, forceRefresh);
+    res.json(data);
+  } catch (error) {
+    console.error('[Media] Ошибка получения медиатеки:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4.6 DELETE /api/media - Безопасное удаление медиафайла
+app.delete('/api/media', async (req, res) => {
+  const mediaPath = req.body?.path || req.query.path;
+  if (!mediaPath) {
+    return res.status(400).json({ error: 'Не указан путь к файлу' });
+  }
+
+  try {
+    await deleteMediaFile(AADNA_PATH, mediaPath);
+    try {
+      runGitCommand('git add -A static/media');
+    } catch (gitErr) {
+      console.warn('[Media] Git add warning:', gitErr.message);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Media] Ошибка удаления медиафайла:', error);
     res.status(500).json({ error: error.message });
   }
 });

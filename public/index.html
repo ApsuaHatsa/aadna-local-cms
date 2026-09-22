@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🧬 AADNA Local Admin</title>
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
   
   <!-- Toast UI Editor -->
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
@@ -32,6 +32,10 @@
       <div style="flex: 1;"></div>
       
       <div class="sidebar-footer">
+        <a href="#/media" class="sidebar-nav-item" id="navItemMedia">
+          <span class="icon">🖼️</span>
+          <span class="label">Медиатека</span>
+        </a>
         <a href="#/templates" class="sidebar-nav-item" id="navItemTemplates">
           <span class="icon">🧩</span>
           <span class="label">Шаблоны блоков</span>
@@ -319,6 +323,163 @@
           </div>
         </div>
 
+        <!-- ========================================== -->
+        <!-- 5. РЕЖИМ МЕДИАТЕКИ (media-view)            -->
+        <!-- ========================================== -->
+        <div id="mediaView" class="panel" style="display: none;">
+          <!-- Шапка раздела -->
+          <div class="media-header">
+            <div>
+              <h2 style="font-size: 1.4rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                <span>🖼️</span> Медиатека проекта
+              </h2>
+              <p style="font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem;">
+                Каталог всех изображений сайта: быстрый поиск, привязка к родам и статьям, копирование путей для вставок в контент.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn" id="reloadMediaBtn">🔄 Обновить</button>
+              <div class="media-view-toggle">
+                <button type="button" class="btn btn-sm active" id="mediaViewGridBtn" title="Сетка карточек">⊞ Сетка</button>
+                <button type="button" class="btn btn-sm" id="mediaViewTableBtn" title="Табличный вид">☰ Таблица</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Сводные карточки статистики -->
+          <div class="media-stats-grid" id="mediaStatsContainer">
+            <div class="media-stat-card">
+              <span class="media-stat-icon">🖼️</span>
+              <div class="media-stat-info">
+                <span class="media-stat-label">Всего файлов</span>
+                <span class="media-stat-value" id="statTotalFiles">0</span>
+              </div>
+            </div>
+            <div class="media-stat-card">
+              <span class="media-stat-icon">💾</span>
+              <div class="media-stat-info">
+                <span class="media-stat-label">Общий объём</span>
+                <span class="media-stat-value" id="statTotalSize">0 MB</span>
+              </div>
+            </div>
+            <div class="media-stat-card">
+              <span class="media-stat-icon">🧬</span>
+              <div class="media-stat-info">
+                <span class="media-stat-label">Результаты ДНК</span>
+                <span class="media-stat-value" id="statResultsCount">0</span>
+              </div>
+            </div>
+            <div class="media-stat-card">
+              <span class="media-stat-icon">📝</span>
+              <div class="media-stat-info">
+                <span class="media-stat-label">Статьи и проекты</span>
+                <span class="media-stat-value" id="statOtherCount">0</span>
+              </div>
+            </div>
+            <div class="media-stat-card">
+              <span class="media-stat-icon">⚠️</span>
+              <div class="media-stat-info">
+                <span class="media-stat-label">Без привязки</span>
+                <span class="media-stat-value" id="statOrphanedCount">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Панель фильтров и поиска -->
+          <div class="media-toolbar">
+            <div class="media-search-box">
+              <span class="media-search-icon">🔍</span>
+              <input type="text" id="mediaSearchInput" placeholder="Поиск по имени файла, фамилии, слагу или названию поста...">
+              <button type="button" id="mediaSearchClearBtn" class="media-search-clear" style="display: none;">✕</button>
+            </div>
+
+            <div class="media-filters-row">
+              <div class="media-filter-group">
+                <label for="mediaFilterCollection">Раздел:</label>
+                <select id="mediaFilterCollection" class="media-select">
+                  <option value="all">Все разделы</option>
+                  <option value="results">🧬 Результаты (results)</option>
+                  <option value="articles">📝 Статьи (articles)</option>
+                  <option value="projects">💼 Проекты (projects)</option>
+                  <option value="pages">📄 Страницы (pages)</option>
+                  <option value="shared">🌐 Общие (shared)</option>
+                  <option value="legacy">📦 Архив (legacy)</option>
+                </select>
+              </div>
+
+              <div class="media-filter-group">
+                <label for="mediaFilterType">Формат:</label>
+                <select id="mediaFilterType" class="media-select">
+                  <option value="all">Все форматы</option>
+                  <option value="png">PNG</option>
+                  <option value="jpg">JPG / JPEG</option>
+                  <option value="webp">WEBP</option>
+                  <option value="svg">SVG</option>
+                  <option value="gif">GIF</option>
+                </select>
+              </div>
+
+              <div class="media-filter-group">
+                <label for="mediaFilterUsage">Статус связи:</label>
+                <select id="mediaFilterUsage" class="media-select">
+                  <option value="all">Все файлы</option>
+                  <option value="used">С привязкой к посту</option>
+                  <option value="orphaned">Без привязки (в корне)</option>
+                </select>
+              </div>
+
+              <div class="media-filter-group">
+                <label for="mediaSort">Сортировка:</label>
+                <select id="mediaSort" class="media-select">
+                  <option value="date-desc">Сначала новые</option>
+                  <option value="date-asc">Сначала старые</option>
+                  <option value="size-desc">По размеру (убыв.)</option>
+                  <option value="size-asc">По размеру (возр.)</option>
+                  <option value="name-asc">По имени (А-Я)</option>
+                  <option value="name-desc">По имени (Я-А)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Строка состояния фильтрации -->
+          <div class="media-results-bar">
+            <span id="mediaResultsCount">Загрузка медиатеки...</span>
+          </div>
+
+          <!-- Режим 1: Сетка карточек -->
+          <div id="mediaGridContainer" class="media-grid"></div>
+
+          <!-- Режим 2: Табличный вид -->
+          <div id="mediaTableContainer" class="entries-table-wrapper" style="display: none;">
+            <table class="entries-table">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Превью</th>
+                  <th>Имя файла</th>
+                  <th>Раздел</th>
+                  <th>Привязан к посту</th>
+                  <th>Формат</th>
+                  <th>Размер</th>
+                  <th>Изменён</th>
+                  <th style="text-align: right;">Действия</th>
+                </tr>
+              </thead>
+              <tbody id="mediaTableBody">
+                <!-- Заполняется динамически -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Состояние: ничего не найдено -->
+          <div id="mediaEmptyState" class="media-empty-state" style="display: none;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔍</div>
+            <h3 style="font-size: 1.1rem; color: #fff; margin-bottom: 0.25rem;">Ничего не найдено</h3>
+            <p style="color: var(--color-muted); font-size: 0.85rem;">Попробуйте сбросить поисковый запрос или выбрать другой раздел.</p>
+            <button type="button" class="btn btn-sm" id="mediaResetFiltersBtn" style="margin-top: 1rem;">Сбросить фильтры</button>
+          </div>
+        </div>
+
       </main>
     </div>
   </div>
@@ -389,10 +550,75 @@
     </div>
   </div>
 
+  <!-- Модальное окно детального просмотра медиафайла -->
+  <div class="modal-overlay" id="mediaDetailModal">
+    <div class="modal-content media-modal-content">
+      <div class="media-modal-header">
+        <h3 class="modal-title" id="mediaModalTitle">Детали медиафайла</h3>
+        <button type="button" class="media-modal-close-btn" id="closeMediaModalBtn" title="Закрыть">✕</button>
+      </div>
+
+      <div class="media-modal-body">
+        <div class="media-modal-preview">
+          <img id="mediaModalImg" src="" alt="Превью медиа" />
+        </div>
+
+        <div class="media-modal-details">
+          <div class="media-detail-field">
+            <span class="media-detail-label">Имя файла:</span>
+            <span class="media-detail-val" id="mediaModalFilename">-</span>
+          </div>
+
+          <div class="media-detail-row-2col">
+            <div class="media-detail-field">
+              <span class="media-detail-label">Разрешение:</span>
+              <span class="media-detail-val" id="mediaModalDimensions">Загрузка...</span>
+            </div>
+            <div class="media-detail-field">
+              <span class="media-detail-label">Размер:</span>
+              <span class="media-detail-val" id="mediaModalSize">-</span>
+            </div>
+          </div>
+
+          <div class="media-detail-field">
+            <span class="media-detail-label">Раздел:</span>
+            <span class="media-detail-val" id="mediaModalCollection">-</span>
+          </div>
+
+          <div class="media-detail-field">
+            <span class="media-detail-label">Привязка к постам:</span>
+            <div id="mediaModalPostsList" class="media-modal-posts-list"></div>
+          </div>
+
+          <div class="media-detail-field" style="margin-top: 0.5rem;">
+            <span class="media-detail-label">URL для сайта:</span>
+            <div class="media-copy-input-group">
+              <input type="text" id="mediaModalUrlInput" readonly />
+              <button type="button" class="btn btn-sm btn-primary" id="mediaModalCopyUrlBtn">Копировать</button>
+            </div>
+          </div>
+
+          <div class="media-detail-field">
+            <span class="media-detail-label">Вставка Markdown:</span>
+            <div class="media-copy-input-group">
+              <input type="text" id="mediaModalMarkdownInput" readonly />
+              <button type="button" class="btn btn-sm btn-primary" id="mediaModalCopyMdBtn">Копировать</button>
+            </div>
+          </div>
+
+          <div class="media-modal-actions">
+            <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm" id="mediaModalOpenRawBtn">🔗 Открыть оригинал</a>
+            <button type="button" class="btn btn-sm btn-danger" id="mediaModalDeleteBtn">🗑️ Удалить файл</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Контейнер для всплывающих уведомлений -->
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Подключение JS -->
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>

@@ -13,6 +13,12 @@ let ACTIVE_COLLECTION_CONFIG = null;
 let YAML_CONFIG_TEXT = '';
 let allEntries = [];
 
+// Глобальное состояние Медиатеки
+let allMediaItems = [];
+let filteredMediaItems = [];
+let mediaViewMode = 'grid'; // 'grid' | 'table'
+let currentMediaItem = null;
+
 // Вспомогательные функции для работы с путями в объектах
 function setValueByPath(obj, path, value) {
   const keys = path.split('.');
@@ -101,10 +107,12 @@ function renderSidebar() {
   const nav = document.getElementById('collectionsNav');
   nav.innerHTML = '';
   
+  const isSpecialView = ['#/configuration', '#/templates', '#/media'].includes(window.location.hash);
+
   COLLECTIONS.forEach(col => {
     const a = document.createElement('a');
     a.href = `#/collection/${col.name}`;
-    a.className = `sidebar-nav-item ${ACTIVE_COLLECTION === col.name && window.location.hash !== '#/configuration' && window.location.hash !== '#/templates' ? 'active' : ''}`;
+    a.className = `sidebar-nav-item ${ACTIVE_COLLECTION === col.name && !isSpecialView ? 'active' : ''}`;
     
     let icon = '📁';
     if (col.name === 'results') icon = '🧬';
@@ -115,6 +123,16 @@ function renderSidebar() {
     a.innerHTML = `<span class="icon">${icon}</span><span class="label">${col.label}</span>`;
     nav.appendChild(a);
   });
+
+  // Подсвечиваем Медиатеку если мы там
+  const navMedia = document.getElementById('navItemMedia');
+  if (navMedia) {
+    if (window.location.hash === '#/media') {
+      navMedia.classList.add('active');
+    } else {
+      navMedia.classList.remove('active');
+    }
+  }
 
   // Подсвечиваем Настройки CMS если мы там
   const navConfig = document.getElementById('navItemConfig');
@@ -1569,8 +1587,16 @@ async function initApp() {
     document.getElementById('configView').style.display = 'none';
     const tmplView = document.getElementById('templatesView');
     if (tmplView) tmplView.style.display = 'none';
+    const mediaView = document.getElementById('mediaView');
+    if (mediaView) mediaView.style.display = 'none';
 
-    if (hash === '#/configuration') {
+    if (hash === '#/media') {
+      if (mediaView) mediaView.style.display = 'block';
+      document.querySelector('.app-sidebar').style.display = 'flex';
+      renderSidebar();
+      loadAndRenderMedia();
+    }
+    else if (hash === '#/configuration') {
       document.getElementById('configView').style.display = 'block';
       document.querySelector('.app-sidebar').style.display = 'flex';
       renderSidebar();
@@ -1696,6 +1722,7 @@ async function initApp() {
 
   setupHtmlImportModalListeners();
   setupTemplatesListeners();
+  setupMediaListeners();
   handleRoute();
 }
 
@@ -2138,5 +2165,589 @@ function setupTemplatesListeners() {
   }
 }
 
+// =============================================================================
+// 🖼️ Медиатека: Логика управления изображениями (Apsny Production Inc.)
+// =============================================================================
+
+function formatMediaBytes(bytes, decimals = 1) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+function formatMediaDate(isoString) {
+  if (!isoString) return '-';
+  try {
+    const d = new Date(isoString);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch (e) {
+    return isoString;
+  }
+}
+
+async function copyMediaText(text, successMsg = 'Скопировано!') {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(successMsg, 'success');
+  } catch (err) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      showToast(successMsg, 'success');
+    } catch (e) {
+      showToast('Не удалось скопировать', 'error');
+    }
+    document.body.removeChild(textArea);
+  }
+}
+
+// Загрузка данных медиатеки с сервера
+async function loadAndRenderMedia(forceRefresh = false) {
+  const countBar = document.getElementById('mediaResultsCount');
+  const gridContainer = document.getElementById('mediaGridContainer');
+  
+  if (allMediaItems.length === 0 || forceRefresh) {
+    if (countBar) countBar.innerText = 'Загрузка и сканирование медиафайлов...';
+    if (gridContainer && allMediaItems.length === 0) {
+      gridContainer.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--color-muted); padding: 3rem;">Загрузка медиатеки...</div>';
+    }
+  }
+
+  try {
+    const res = await fetch(`/api/media${forceRefresh ? '?refresh=true' : ''}`);
+    if (!res.ok) throw new Error('Не удалось получить медиафайлы с сервера');
+    const data = await res.json();
+
+    allMediaItems = data.items || [];
+    renderMediaStats(data.stats || {});
+    applyMediaFilters();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message, 'error');
+    if (countBar) countBar.innerText = 'Ошибка загрузки медиатеки';
+  }
+}
+
+// Отрисовка сводной статистики
+function renderMediaStats(stats) {
+  const totalFilesEl = document.getElementById('statTotalFiles');
+  const totalSizeEl = document.getElementById('statTotalSize');
+  const resultsCountEl = document.getElementById('statResultsCount');
+  const otherCountEl = document.getElementById('statOtherCount');
+  const orphanedCountEl = document.getElementById('statOrphanedCount');
+
+  if (totalFilesEl) totalFilesEl.innerText = stats.totalFiles || 0;
+  if (totalSizeEl) totalSizeEl.innerText = formatMediaBytes(stats.totalSize || 0);
+  
+  const resultsCount = stats.byCollection?.results || 0;
+  if (resultsCountEl) resultsCountEl.innerText = resultsCount;
+
+  const otherCount = (stats.totalFiles || 0) - resultsCount;
+  if (otherCountEl) otherCountEl.innerText = otherCount;
+
+  if (orphanedCountEl) orphanedCountEl.innerText = stats.unusedCount || 0;
+}
+
+// Применение фильтров и сортировки
+function applyMediaFilters() {
+  const searchInput = document.getElementById('mediaSearchInput');
+  const collectionSelect = document.getElementById('mediaFilterCollection');
+  const typeSelect = document.getElementById('mediaFilterType');
+  const usageSelect = document.getElementById('mediaFilterUsage');
+  const sortSelect = document.getElementById('mediaSort');
+
+  const query = (searchInput?.value || '').trim().toLowerCase();
+  const selectedCollection = collectionSelect?.value || 'all';
+  const selectedType = typeSelect?.value || 'all';
+  const selectedUsage = usageSelect?.value || 'all';
+  const selectedSort = sortSelect?.value || 'date-desc';
+
+  // Показываем или скрываем крестик сброса поиска
+  const clearBtn = document.getElementById('mediaSearchClearBtn');
+  if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
+
+  filteredMediaItems = allMediaItems.filter(item => {
+    // 1. Поиск по тексту
+    if (query) {
+      const matchFilename = item.filename.toLowerCase().includes(query);
+      const matchSlug = item.folderSlug && item.folderSlug.toLowerCase().includes(query);
+      const matchUrl = item.url.toLowerCase().includes(query);
+      const matchPostTitle = item.folderPost?.title && item.folderPost.title.toLowerCase().includes(query);
+      const matchSurname = item.folderPost?.surname && item.folderPost.surname.toLowerCase().includes(query);
+      const matchUsed = item.usedInPosts?.some(p => p.title.toLowerCase().includes(query) || p.slug.toLowerCase().includes(query));
+
+      if (!matchFilename && !matchSlug && !matchUrl && !matchPostTitle && !matchSurname && !matchUsed) {
+        return false;
+      }
+    }
+
+    // 2. Раздел (Коллекция)
+    if (selectedCollection !== 'all' && item.collection !== selectedCollection) {
+      return false;
+    }
+
+    // 3. Формат файла
+    if (selectedType !== 'all') {
+      if (selectedType === 'jpg' && !['jpg', 'jpeg'].includes(item.extension)) return false;
+      if (selectedType !== 'jpg' && item.extension !== selectedType) return false;
+    }
+
+    // 4. Статус привязки
+    if (selectedUsage === 'used' && item.isOrphaned) return false;
+    if (selectedUsage === 'orphaned' && !item.isOrphaned) return false;
+
+    return true;
+  });
+
+  // Сортировка
+  filteredMediaItems.sort((a, b) => {
+    if (selectedSort === 'date-desc') return new Date(b.modified) - new Date(a.modified);
+    if (selectedSort === 'date-asc') return new Date(a.modified) - new Date(b.modified);
+    if (selectedSort === 'size-desc') return b.size - a.size;
+    if (selectedSort === 'size-asc') return a.size - b.size;
+    if (selectedSort === 'name-asc') return a.filename.localeCompare(b.filename);
+    if (selectedSort === 'name-desc') return b.filename.localeCompare(a.filename);
+    return 0;
+  });
+
+  // Обновление строки информации
+  const countBar = document.getElementById('mediaResultsCount');
+  const filteredSize = filteredMediaItems.reduce((acc, it) => acc + it.size, 0);
+  if (countBar) {
+    countBar.innerText = `Показано: ${filteredMediaItems.length} из ${allMediaItems.length} файлов (${formatMediaBytes(filteredSize)})`;
+  }
+
+  // Переключение контейнеров
+  const emptyState = document.getElementById('mediaEmptyState');
+  const gridContainer = document.getElementById('mediaGridContainer');
+  const tableContainer = document.getElementById('mediaTableContainer');
+
+  if (filteredMediaItems.length === 0) {
+    if (emptyState) emptyState.style.display = 'flex';
+    if (gridContainer) gridContainer.style.display = 'none';
+    if (tableContainer) tableContainer.style.display = 'none';
+  } else {
+    if (emptyState) emptyState.style.display = 'none';
+    if (mediaViewMode === 'grid') {
+      if (gridContainer) gridContainer.style.display = 'grid';
+      if (tableContainer) tableContainer.style.display = 'none';
+      renderMediaGrid(filteredMediaItems);
+    } else {
+      if (gridContainer) gridContainer.style.display = 'none';
+      if (tableContainer) tableContainer.style.display = 'block';
+      renderMediaTable(filteredMediaItems);
+    }
+  }
+}
+
+// Отрисовка сетки карточек
+function renderMediaGrid(items) {
+  const container = document.getElementById('mediaGridContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'media-card';
+
+    // Определение привязки к посту
+    let postBadgeHtml = '';
+    if (item.usedInPosts && item.usedInPosts.length > 0) {
+      const p = item.usedInPosts[0];
+      const extraCount = item.usedInPosts.length > 1 ? ` (+${item.usedInPosts.length - 1})` : '';
+      postBadgeHtml = `
+        <a href="#/collection/${p.collection}/edit/${p.slug}" class="media-card-post-link" title="Используется в посте: ${p.title}">
+          <span class="post-icon">${p.collection === 'results' ? '🧬' : '📝'}</span>
+          <span class="post-name">${p.title}${extraCount}</span>
+        </a>
+      `;
+    } else if (item.folderPost && item.folderPost.exists) {
+      const p = item.folderPost;
+      postBadgeHtml = `
+        <a href="#/collection/${p.collection}/edit/${p.slug}" class="media-card-post-link" title="Папка поста: ${p.title}">
+          <span class="post-icon">📁</span>
+          <span class="post-name">${p.title}</span>
+        </a>
+      `;
+    } else if (item.folderPost) {
+      postBadgeHtml = `
+        <span class="media-card-post-tag" title="Папка: ${item.folderPost.rawSlug}">
+          <span>📁</span> ${item.folderPost.rawSlug}
+        </span>
+      `;
+    } else {
+      postBadgeHtml = `
+        <span class="media-card-post-tag">
+          <span>📁</span> ${item.collection} (корень)
+        </span>
+      `;
+    }
+
+    card.innerHTML = `
+      <div class="media-card-thumb-wrap">
+        <img src="${item.url}" class="media-card-thumb" alt="${item.filename}" loading="lazy" />
+        <span class="media-card-badge-ext">${item.extension}</span>
+        <span class="media-card-badge-size">${formatMediaBytes(item.size)}</span>
+      </div>
+      <div class="media-card-body">
+        <div class="media-card-filename" title="${item.filename}">${item.filename}</div>
+        ${postBadgeHtml}
+        <div class="media-card-path" title="${item.url}">${item.url}</div>
+      </div>
+      <div class="media-card-actions">
+        <button type="button" class="btn btn-sm btn-copy-url" title="Копировать URL">📋 URL</button>
+        <button type="button" class="btn btn-sm btn-copy-md" title="Копировать код для Markdown">📝 MD</button>
+        <button type="button" class="btn btn-sm btn-view" title="Просмотр">👁️</button>
+        <button type="button" class="btn btn-sm btn-delete" style="color: var(--color-danger);" title="Удалить файл">🗑️</button>
+      </div>
+    `;
+
+    // События
+    card.querySelector('.media-card-thumb-wrap').addEventListener('click', () => openMediaModal(item));
+    card.querySelector('.btn-view').addEventListener('click', () => openMediaModal(item));
+    card.querySelector('.btn-copy-url').addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyMediaText(item.url, 'URL картинки скопирован в буфер!');
+    });
+    card.querySelector('.btn-copy-md').addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyMediaText(`![${item.filename}](${item.url})`, 'Markdown код скопирован!');
+    });
+    card.querySelector('.btn-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteMedia(item);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+// Отрисовка таблицы
+function renderMediaTable(items) {
+  const tbody = document.getElementById('mediaTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  items.forEach(item => {
+    const tr = document.createElement('tr');
+
+    // Определение привязки к посту
+    let postCellHtml = '';
+    if (item.usedInPosts && item.usedInPosts.length > 0) {
+      const p = item.usedInPosts[0];
+      const extraCount = item.usedInPosts.length > 1 ? ` (+${item.usedInPosts.length - 1})` : '';
+      postCellHtml = `
+        <a href="#/collection/${p.collection}/edit/${p.slug}" class="media-card-post-link" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">
+          <span class="post-icon">${p.collection === 'results' ? '🧬' : '📝'}</span>
+          <span class="post-name">${p.title}${extraCount}</span>
+        </a>
+      `;
+    } else if (item.folderPost && item.folderPost.exists) {
+      const p = item.folderPost;
+      postCellHtml = `
+        <a href="#/collection/${p.collection}/edit/${p.slug}" class="media-card-post-link" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">
+          <span class="post-icon">📁</span>
+          <span class="post-name">${p.title}</span>
+        </a>
+      `;
+    } else if (item.folderPost) {
+      postCellHtml = `<span style="color: var(--color-muted); font-size: 0.75rem;">📁 ${item.folderPost.rawSlug}</span>`;
+    } else {
+      postCellHtml = `<span style="color: #64748b; font-size: 0.75rem;">Без привязки</span>`;
+    }
+
+    tr.innerHTML = `
+      <td>
+        <img src="${item.url}" class="media-table-thumb" alt="${item.filename}" loading="lazy" />
+      </td>
+      <td style="font-weight: 600; color: #fff; max-width: 200px; word-break: break-all;">
+        ${item.filename}
+      </td>
+      <td>
+        <span style="font-size: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--color-border);">
+          ${item.collection}
+        </span>
+      </td>
+      <td>${postCellHtml}</td>
+      <td>
+        <span style="font-family: monospace; font-size: 0.75rem; color: var(--color-accent); font-weight: bold; text-transform: uppercase;">
+          ${item.extension}
+        </span>
+      </td>
+      <td style="font-family: monospace; font-size: 0.8rem; color: #cbd5e1;">
+        ${formatMediaBytes(item.size)}
+      </td>
+      <td style="font-size: 0.78rem; color: var(--color-muted);">
+        ${formatMediaDate(item.modified)}
+      </td>
+      <td style="text-align: right;">
+        <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+          <button class="btn btn-sm btn-copy-url" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" title="Копировать URL">📋 URL</button>
+          <button class="btn btn-sm btn-copy-md" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" title="Копировать MD">📝 MD</button>
+          <button class="btn btn-sm btn-view" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" title="Просмотр">👁️</button>
+          <button class="btn btn-sm btn-delete" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; color: var(--color-danger);" title="Удалить">🗑️</button>
+        </div>
+      </td>
+    `;
+
+    // События в строке таблицы
+    tr.querySelector('.media-table-thumb').addEventListener('click', () => openMediaModal(item));
+    tr.querySelector('.btn-view').addEventListener('click', () => openMediaModal(item));
+    tr.querySelector('.btn-copy-url').addEventListener('click', () => copyMediaText(item.url, 'URL скопирован!'));
+    tr.querySelector('.btn-copy-md').addEventListener('click', () => copyMediaText(`![${item.filename}](${item.url})`, 'Markdown скопирован!'));
+    tr.querySelector('.btn-delete').addEventListener('click', () => deleteMedia(item));
+
+    tbody.appendChild(tr);
+  });
+}
+
+// Открытие модального окна просмотра
+function openMediaModal(item) {
+  currentMediaItem = item;
+  const modal = document.getElementById('mediaDetailModal');
+  if (!modal) return;
+
+  const img = document.getElementById('mediaModalImg');
+  const filenameEl = document.getElementById('mediaModalFilename');
+  const dimEl = document.getElementById('mediaModalDimensions');
+  const sizeEl = document.getElementById('mediaModalSize');
+  const colEl = document.getElementById('mediaModalCollection');
+  const postsListEl = document.getElementById('mediaModalPostsList');
+  const urlInput = document.getElementById('mediaModalUrlInput');
+  const mdInput = document.getElementById('mediaModalMarkdownInput');
+  const openRawBtn = document.getElementById('mediaModalOpenRawBtn');
+
+  if (filenameEl) filenameEl.innerText = item.filename;
+  if (sizeEl) sizeEl.innerText = formatMediaBytes(item.size);
+  if (colEl) colEl.innerText = `${item.collection}${item.folderSlug ? ` / ${item.folderSlug}` : ''}`;
+  if (urlInput) urlInput.value = item.url;
+  if (mdInput) mdInput.value = `![${item.filename}](${item.url})`;
+  if (openRawBtn) openRawBtn.href = item.url;
+
+  if (dimEl) dimEl.innerText = 'Загрузка...';
+  if (img) {
+    img.src = item.url;
+    img.onload = () => {
+      if (dimEl) dimEl.innerText = `${img.naturalWidth} × ${img.naturalHeight} px`;
+    };
+    img.onerror = () => {
+      if (dimEl) dimEl.innerText = 'Недоступно';
+    };
+  }
+
+  // Список привязанных публикаций
+  if (postsListEl) {
+    postsListEl.innerHTML = '';
+    const postsToShow = [];
+
+    if (item.usedInPosts && item.usedInPosts.length > 0) {
+      item.usedInPosts.forEach(p => {
+        postsToShow.push({
+          title: p.title,
+          collection: p.collection,
+          slug: p.slug,
+          status: 'Используется в тексте'
+        });
+      });
+    }
+
+    if (item.folderPost && item.folderPost.exists && !postsToShow.some(p => p.slug === item.folderPost.slug)) {
+      postsToShow.push({
+        title: item.folderPost.title,
+        collection: item.folderPost.collection,
+        slug: item.folderPost.slug,
+        status: 'Родная папка'
+      });
+    }
+
+    if (postsToShow.length > 0) {
+      postsToShow.forEach(p => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'media-modal-post-item';
+        itemDiv.innerHTML = `
+          <div>
+            <span style="font-weight: 600; color: #fff;">${p.title}</span>
+            <span style="font-size: 0.7rem; color: var(--color-muted); margin-left: 0.4rem;">(${p.status})</span>
+          </div>
+          <a href="#/collection/${p.collection}/edit/${p.slug}" class="btn btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; color: var(--color-accent); border-color: rgba(0, 229, 192, 0.3);">
+            → Редактировать
+          </a>
+        `;
+        itemDiv.querySelector('a').addEventListener('click', () => {
+          closeMediaModal();
+        });
+        postsListEl.appendChild(itemDiv);
+      });
+    } else {
+      postsListEl.innerHTML = '<span style="color: var(--color-muted); font-size: 0.8rem;">Файл не привязан к конкретным публикациям.</span>';
+    }
+  }
+
+  modal.style.display = 'flex';
+}
+
+function closeMediaModal() {
+  const modal = document.getElementById('mediaDetailModal');
+  if (modal) modal.style.display = 'none';
+  currentMediaItem = null;
+}
+
+// Удаление медиафайла
+async function deleteMedia(item) {
+  if (!confirm(`Удалить медиафайл "${item.filename}" с диска? Это действие необратимо.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/media', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: item.url })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Ошибка удаления');
+    }
+
+    showToast(`Файл "${item.filename}" успешно удален`, 'success');
+    closeMediaModal();
+    loadAndRenderMedia(true);
+    updateGitStatus();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+// Установка слушателей интерфейса медиатеки
+function setupMediaListeners() {
+  // Переключение сетка / таблица
+  const gridBtn = document.getElementById('mediaViewGridBtn');
+  const tableBtn = document.getElementById('mediaViewTableBtn');
+
+  if (gridBtn && tableBtn) {
+    gridBtn.addEventListener('click', () => {
+      mediaViewMode = 'grid';
+      gridBtn.classList.add('active');
+      tableBtn.classList.remove('active');
+      applyMediaFilters();
+    });
+
+    tableBtn.addEventListener('click', () => {
+      mediaViewMode = 'table';
+      tableBtn.classList.add('active');
+      gridBtn.classList.remove('active');
+      applyMediaFilters();
+    });
+  }
+
+  // Поиск с дебаунсом
+  const searchInput = document.getElementById('mediaSearchInput');
+  const searchClearBtn = document.getElementById('mediaSearchClearBtn');
+  let searchDebounceTimer = null;
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        applyMediaFilters();
+      }, 200);
+    });
+  }
+
+  if (searchClearBtn) {
+    searchClearBtn.addEventListener('click', () => {
+      if (searchInput) searchInput.value = '';
+      applyMediaFilters();
+    });
+  }
+
+  // Фильтры
+  const colFilter = document.getElementById('mediaFilterCollection');
+  const typeFilter = document.getElementById('mediaFilterType');
+  const usageFilter = document.getElementById('mediaFilterUsage');
+  const sortSelect = document.getElementById('mediaSort');
+
+  [colFilter, typeFilter, usageFilter, sortSelect].forEach(sel => {
+    if (sel) sel.addEventListener('change', () => applyMediaFilters());
+  });
+
+  // Кнопка сброса фильтров
+  const resetBtn = document.getElementById('mediaResetFiltersBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (searchInput) searchInput.value = '';
+      if (colFilter) colFilter.value = 'all';
+      if (typeFilter) typeFilter.value = 'all';
+      if (usageFilter) usageFilter.value = 'all';
+      if (sortSelect) sortSelect.value = 'date-desc';
+      applyMediaFilters();
+    });
+  }
+
+  // Кнопка принудительного обновления
+  const reloadBtn = document.getElementById('reloadMediaBtn');
+  if (reloadBtn) {
+    reloadBtn.addEventListener('click', () => {
+      loadAndRenderMedia(true);
+      showToast('Медиатека обновлена', 'info');
+    });
+  }
+
+  // Модальное окно: закрытие
+  const modal = document.getElementById('mediaDetailModal');
+  const closeBtn = document.getElementById('closeMediaModalBtn');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeMediaModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeMediaModal();
+    });
+  }
+
+  // Копирование в модальном окне
+  const copyUrlBtn = document.getElementById('mediaModalCopyUrlBtn');
+  const copyMdBtn = document.getElementById('mediaModalCopyMdBtn');
+  const urlInput = document.getElementById('mediaModalUrlInput');
+  const mdInput = document.getElementById('mediaModalMarkdownInput');
+
+  if (copyUrlBtn && urlInput) {
+    copyUrlBtn.addEventListener('click', () => copyMediaText(urlInput.value, 'URL скопирован!'));
+  }
+
+  if (copyMdBtn && mdInput) {
+    copyMdBtn.addEventListener('click', () => copyMediaText(mdInput.value, 'Markdown код скопирован!'));
+  }
+
+  // Удаление из модального окна
+  const modalDeleteBtn = document.getElementById('mediaModalDeleteBtn');
+  if (modalDeleteBtn) {
+    modalDeleteBtn.addEventListener('click', () => {
+      if (currentMediaItem) deleteMedia(currentMediaItem);
+    });
+  }
+
+  // Закрытие по клавише Esc
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const detailModal = document.getElementById('mediaDetailModal');
+      if (detailModal && detailModal.style.display === 'flex') {
+        closeMediaModal();
+      }
+    }
+  });
+}
+
 // Запуск
 document.addEventListener('DOMContentLoaded', initApp);
+
