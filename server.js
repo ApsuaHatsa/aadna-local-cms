@@ -28,7 +28,7 @@ import { execSync, exec, spawn } from 'child_process';
 
 // Импорт библиотек автоматизации
 import { normalizeAadnaContent } from './lib/normalize.js';
-import { saveUploadedImage, relocateAadnaResultMedia, getMediaPaths, getMediaLibrary, deleteMediaFile, invalidateMediaCache } from './lib/media.js';
+import { saveUploadedImage, relocateAadnaResultMedia, getMediaPaths, getMediaLibrary, deleteMediaFile, invalidateMediaCache, openMediaFile } from './lib/media.js';
 import { syncSnpPath } from './lib/snp.js';
 import { generatePreview } from './lib/preview.js';
 import { getStatus, publish, runGitCommand } from './lib/git.js';
@@ -403,6 +403,23 @@ app.delete('/api/media', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// 4.7 POST /api/media/open - Открытие медиафайла локально в системном просмотрщике ОС
+app.post('/api/media/open', async (req, res) => {
+  const mediaPath = req.body?.path;
+  if (!mediaPath) {
+    return res.status(400).json({ error: 'Не указан путь к файлу' });
+  }
+
+  try {
+    const result = await openMediaFile(AADNA_PATH, mediaPath);
+    res.json(result);
+  } catch (error) {
+    console.error('[Media] Ошибка открытия медиафайла:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 async function fetchYtreeScreenshot(clade, slug) {
   const themes = ['light', 'dark'];

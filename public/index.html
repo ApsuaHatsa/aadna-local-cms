@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🧬 AADNA Local Admin</title>
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
   
   <!-- Toast UI Editor -->
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
@@ -348,35 +348,35 @@
 
           <!-- Сводные карточки статистики -->
           <div class="media-stats-grid" id="mediaStatsContainer">
-            <div class="media-stat-card">
+            <div class="media-stat-card" data-filter="all" title="Показать все файлы (сбросить фильтры)">
               <span class="media-stat-icon">🖼️</span>
               <div class="media-stat-info">
                 <span class="media-stat-label">Всего файлов</span>
                 <span class="media-stat-value" id="statTotalFiles">0</span>
               </div>
             </div>
-            <div class="media-stat-card">
+            <div class="media-stat-card" data-filter="size" title="Сортировать по объёму файлов">
               <span class="media-stat-icon">💾</span>
               <div class="media-stat-info">
                 <span class="media-stat-label">Общий объём</span>
                 <span class="media-stat-value" id="statTotalSize">0 MB</span>
               </div>
             </div>
-            <div class="media-stat-card">
+            <div class="media-stat-card" data-filter="results" title="Фильтровать: Только Результаты ДНК">
               <span class="media-stat-icon">🧬</span>
               <div class="media-stat-info">
                 <span class="media-stat-label">Результаты ДНК</span>
                 <span class="media-stat-value" id="statResultsCount">0</span>
               </div>
             </div>
-            <div class="media-stat-card">
+            <div class="media-stat-card" data-filter="other" title="Фильтровать: Статьи, проекты и др.">
               <span class="media-stat-icon">📝</span>
               <div class="media-stat-info">
                 <span class="media-stat-label">Статьи и проекты</span>
                 <span class="media-stat-value" id="statOtherCount">0</span>
               </div>
             </div>
-            <div class="media-stat-card">
+            <div class="media-stat-card" data-filter="orphaned" title="Фильтровать: Файлы без привязки">
               <span class="media-stat-icon">⚠️</span>
               <div class="media-stat-info">
                 <span class="media-stat-label">Без привязки</span>
@@ -399,6 +399,7 @@
                 <select id="mediaFilterCollection" class="media-select">
                   <option value="all">Все разделы</option>
                   <option value="results">🧬 Результаты (results)</option>
+                  <option value="other">📝 Статьи, проекты и др. (не ДНК)</option>
                   <option value="articles">📝 Статьи (articles)</option>
                   <option value="projects">💼 Проекты (projects)</option>
                   <option value="pages">📄 Страницы (pages)</option>
@@ -607,7 +608,10 @@
           </div>
 
           <div class="media-modal-actions">
-            <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm" id="mediaModalOpenRawBtn">🔗 Открыть оригинал</a>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-sm btn-primary" id="mediaModalOpenLocalBtn" title="Открыть файл на компьютере в системном просмотрщике">📂 Открыть на ПК</button>
+              <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm" id="mediaModalOpenRawBtn" title="Открыть в браузере">🌐 В браузере</a>
+            </div>
             <button type="button" class="btn btn-sm btn-danger" id="mediaModalDeleteBtn">🗑️ Удалить файл</button>
           </div>
         </div>
@@ -619,6 +623,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Подключение JS -->
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=9"></script>
 </body>
 </html>

@@ -1242,12 +1242,35 @@ table.entries-table tr:hover td {
   display: flex;
   align-items: center;
   gap: 1rem;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
 
 .media-stat-card:hover {
-  border-color: rgba(0, 229, 192, 0.3);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+  border-color: rgba(0, 229, 192, 0.4);
+  box-shadow: 0 6px 20px rgba(0, 229, 192, 0.12), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.media-stat-card:active {
+  transform: translateY(0);
+}
+
+.media-stat-card.active {
+  border-color: var(--color-accent);
+  background: rgba(0, 229, 192, 0.08);
+  box-shadow: 0 0 16px rgba(0, 229, 192, 0.25), inset 0 0 12px rgba(0, 229, 192, 0.05);
+}
+
+.media-stat-card.active .media-stat-value {
+  color: var(--color-accent);
+  text-shadow: 0 0 10px rgba(0, 229, 192, 0.3);
+}
+
+.media-stat-card.active .media-stat-label {
+  color: #f1f5f9;
 }
 
 .media-stat-icon {
@@ -1428,6 +1451,31 @@ table.entries-table tr:hover td {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.media-card-thumb-wrap::after {
+  content: '📂 Открыть на ПК';
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(10, 20, 40, 0.9);
+  backdrop-filter: blur(4px);
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 229, 192, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.media-card-thumb-wrap:hover::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .media-card-thumb {
@@ -1635,6 +1683,7 @@ table.entries-table tr:hover td {
 }
 
 .media-modal-preview {
+  position: relative;
   background: #020617;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -1645,12 +1694,48 @@ table.entries-table tr:hover td {
   max-height: 380px;
   overflow: hidden;
   padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.media-modal-preview:hover {
+  border-color: rgba(0, 229, 192, 0.5);
+  box-shadow: 0 0 20px rgba(0, 229, 192, 0.15);
+}
+
+.media-modal-preview::after {
+  content: '📂 Нажмите, чтобы открыть фото на ПК';
+  position: absolute;
+  bottom: 10px;
+  background: rgba(10, 20, 40, 0.9);
+  backdrop-filter: blur(4px);
+  color: var(--color-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 229, 192, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.media-modal-preview:hover::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .media-modal-preview img {
   max-width: 100%;
   max-height: 360px;
   object-fit: contain;
+  transition: transform 0.25s ease;
+}
+
+.media-modal-preview:hover img {
+  transform: scale(1.02);
 }
 
 .media-modal-details {

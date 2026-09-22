@@ -2257,6 +2257,57 @@ function renderMediaStats(stats) {
   if (orphanedCountEl) orphanedCountEl.innerText = stats.unusedCount || 0;
 }
 
+// Открытие файла локально на компьютере через системный просмотрщик
+async function openMediaLocally(item) {
+  if (!item || !item.url) return;
+  try {
+    const res = await fetch('/api/media/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: item.url })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Не удалось открыть файл');
+    }
+
+    showToast(`Файл "${item.filename}" открыт на ПК`, 'info');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message, 'error');
+  }
+}
+
+// Подсветка активной карточки статистики в зависимости от текущих фильтров
+function updateStatCardsActiveState() {
+  const collectionSelect = document.getElementById('mediaFilterCollection');
+  const usageSelect = document.getElementById('mediaFilterUsage');
+  const typeSelect = document.getElementById('mediaFilterType');
+  const sortSelect = document.getElementById('mediaSort');
+  const searchInput = document.getElementById('mediaSearchInput');
+
+  const col = collectionSelect?.value || 'all';
+  const usage = usageSelect?.value || 'all';
+  const type = typeSelect?.value || 'all';
+  const sort = sortSelect?.value || 'date-desc';
+  const query = (searchInput?.value || '').trim();
+
+  document.querySelectorAll('.media-stat-card').forEach(card => card.classList.remove('active'));
+
+  if (usage === 'orphaned') {
+    document.querySelector('.media-stat-card[data-filter="orphaned"]')?.classList.add('active');
+  } else if (col === 'results') {
+    document.querySelector('.media-stat-card[data-filter="results"]')?.classList.add('active');
+  } else if (col === 'other') {
+    document.querySelector('.media-stat-card[data-filter="other"]')?.classList.add('active');
+  } else if (sort.startsWith('size')) {
+    document.querySelector('.media-stat-card[data-filter="size"]')?.classList.add('active');
+  } else if (col === 'all' && usage === 'all' && type === 'all' && !query && sort === 'date-desc') {
+    document.querySelector('.media-stat-card[data-filter="all"]')?.classList.add('active');
+  }
+}
+
 // Применение фильтров и сортировки
 function applyMediaFilters() {
   const searchInput = document.getElementById('mediaSearchInput');
@@ -2275,6 +2326,9 @@ function applyMediaFilters() {
   const clearBtn = document.getElementById('mediaSearchClearBtn');
   if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
 
+  // Синхронизация подсветки стат-карточек
+  updateStatCardsActiveState();
+
   filteredMediaItems = allMediaItems.filter(item => {
     // 1. Поиск по тексту
     if (query) {
@@ -2291,7 +2345,9 @@ function applyMediaFilters() {
     }
 
     // 2. Раздел (Коллекция)
-    if (selectedCollection !== 'all' && item.collection !== selectedCollection) {
+    if (selectedCollection === 'other') {
+      if (item.collection === 'results') return false;
+    } else if (selectedCollection !== 'all' && item.collection !== selectedCollection) {
       return false;
     }
 
@@ -2393,12 +2449,12 @@ function renderMediaGrid(items) {
     }
 
     card.innerHTML = `
-      <div class="media-card-thumb-wrap">
+      <div class="media-card-thumb-wrap" title="Нажмите, чтобы открыть фото локально на ПК">
         <img src="${item.url}" class="media-card-thumb" alt="${item.filename}" loading="lazy" />
         <span class="media-card-badge-ext">${item.extension}</span>
         <span class="media-card-badge-size">${formatMediaBytes(item.size)}</span>
       </div>
-      <div class="media-card-body">
+      <div class="media-card-body" style="cursor: pointer;" title="Посмотреть подробную информацию">
         <div class="media-card-filename" title="${item.filename}">${item.filename}</div>
         ${postBadgeHtml}
         <div class="media-card-path" title="${item.url}">${item.url}</div>
@@ -2406,13 +2462,21 @@ function renderMediaGrid(items) {
       <div class="media-card-actions">
         <button type="button" class="btn btn-sm btn-copy-url" title="Копировать URL">📋 URL</button>
         <button type="button" class="btn btn-sm btn-copy-md" title="Копировать код для Markdown">📝 MD</button>
-        <button type="button" class="btn btn-sm btn-view" title="Просмотр">👁️</button>
+        <button type="button" class="btn btn-sm btn-view" title="Подробнее">👁️</button>
         <button type="button" class="btn btn-sm btn-delete" style="color: var(--color-danger);" title="Удалить файл">🗑️</button>
       </div>
     `;
 
-    // События
-    card.querySelector('.media-card-thumb-wrap').addEventListener('click', () => openMediaModal(item));
+    // События: клик по превью открывает локально на ПК, по телу - инфо модалку
+    card.querySelector('.media-card-thumb-wrap').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMediaLocally(item);
+    });
+    card.querySelector('.media-card-body').addEventListener('click', (e) => {
+      // Если кликнули по ссылке на пост внутри карточки, не открываем модалку
+      if (e.target.closest('a')) return;
+      openMediaModal(item);
+    });
     card.querySelector('.btn-view').addEventListener('click', () => openMediaModal(item));
     card.querySelector('.btn-copy-url').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2467,7 +2531,7 @@ function renderMediaTable(items) {
 
     tr.innerHTML = `
       <td>
-        <img src="${item.url}" class="media-table-thumb" alt="${item.filename}" loading="lazy" />
+        <img src="${item.url}" class="media-table-thumb" alt="${item.filename}" title="Нажмите, чтобы открыть фото на ПК" style="cursor: pointer;" loading="lazy" />
       </td>
       <td style="font-weight: 600; color: #fff; max-width: 200px; word-break: break-all;">
         ${item.filename}
@@ -2499,8 +2563,14 @@ function renderMediaTable(items) {
       </td>
     `;
 
-    // События в строке таблицы
-    tr.querySelector('.media-table-thumb').addEventListener('click', () => openMediaModal(item));
+    // События в строке таблицы: клик по превью открывает на ПК, по названию и кнопке 👁️ - модалку
+    tr.querySelector('.media-table-thumb').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMediaLocally(item);
+    });
+    tr.querySelector('td:nth-child(2)').style.cursor = 'pointer';
+    tr.querySelector('td:nth-child(2)').title = 'Посмотреть подробную информацию';
+    tr.querySelector('td:nth-child(2)').addEventListener('click', () => openMediaModal(item));
     tr.querySelector('.btn-view').addEventListener('click', () => openMediaModal(item));
     tr.querySelector('.btn-copy-url').addEventListener('click', () => copyMediaText(item.url, 'URL скопирован!'));
     tr.querySelector('.btn-copy-md').addEventListener('click', () => copyMediaText(`![${item.filename}](${item.url})`, 'Markdown скопирован!'));
@@ -2680,6 +2750,71 @@ function setupMediaListeners() {
   [colFilter, typeFilter, usageFilter, sortSelect].forEach(sel => {
     if (sel) sel.addEventListener('change', () => applyMediaFilters());
   });
+
+  // Кликабельные карточки статистики с toggle-поведением
+  const statCards = document.querySelectorAll('.media-stat-card[data-filter]');
+  statCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const filterType = card.getAttribute('data-filter');
+      const isAlreadyActive = card.classList.contains('active');
+
+      if (filterType === 'all') {
+        if (searchInput) searchInput.value = '';
+        if (colFilter) colFilter.value = 'all';
+        if (typeFilter) typeFilter.value = 'all';
+        if (usageFilter) usageFilter.value = 'all';
+        if (sortSelect) sortSelect.value = 'date-desc';
+      } else if (filterType === 'results') {
+        if (isAlreadyActive) {
+          if (colFilter) colFilter.value = 'all';
+        } else {
+          if (colFilter) colFilter.value = 'results';
+          if (usageFilter) usageFilter.value = 'all';
+        }
+      } else if (filterType === 'other') {
+        if (isAlreadyActive) {
+          if (colFilter) colFilter.value = 'all';
+        } else {
+          if (colFilter) colFilter.value = 'other';
+          if (usageFilter) usageFilter.value = 'all';
+        }
+      } else if (filterType === 'orphaned') {
+        if (isAlreadyActive) {
+          if (usageFilter) usageFilter.value = 'all';
+        } else {
+          if (usageFilter) usageFilter.value = 'orphaned';
+          if (colFilter) colFilter.value = 'all';
+        }
+      } else if (filterType === 'size') {
+        if (sortSelect) {
+          if (sortSelect.value === 'size-desc') {
+            sortSelect.value = 'size-asc';
+          } else if (sortSelect.value === 'size-asc') {
+            sortSelect.value = 'date-desc';
+          } else {
+            sortSelect.value = 'size-desc';
+          }
+        }
+      }
+
+      applyMediaFilters();
+    });
+  });
+
+  // Открытие локально из модального окна
+  const openLocalBtn = document.getElementById('mediaModalOpenLocalBtn');
+  if (openLocalBtn) {
+    openLocalBtn.addEventListener('click', () => {
+      if (currentMediaItem) openMediaLocally(currentMediaItem);
+    });
+  }
+
+  const modalPreview = document.querySelector('.media-modal-preview');
+  if (modalPreview) {
+    modalPreview.addEventListener('click', () => {
+      if (currentMediaItem) openMediaLocally(currentMediaItem);
+    });
+  }
 
   // Кнопка сброса фильтров
   const resetBtn = document.getElementById('mediaResetFiltersBtn');
