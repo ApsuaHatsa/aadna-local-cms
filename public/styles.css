@@ -1816,3 +1816,193 @@ table.entries-table tr:hover td {
   padding-top: 1rem;
 }
 
+/* ============================================================================= */
+/* 📦 Стили модального окна Git (Apsny Production Inc.)                           */
+/* ============================================================================= */
+
+.git-tabs-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+}
+
+.git-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.git-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.git-tab-btn.active {
+  color: var(--color-accent);
+  background: rgba(0, 229, 192, 0.1);
+  border-color: rgba(0, 229, 192, 0.3);
+  box-shadow: 0 0 10px rgba(0, 229, 192, 0.15);
+}
+
+.git-files-list {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.6rem;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.git-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.git-file-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.git-file-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.git-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-file-badge {
+  font-weight: bold;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.git-file-discard-btn {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.git-file-discard-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+/* Список истории коммитов */
+.git-commits-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 0.25rem;
+}
+
+.git-commit-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(10, 20, 40, 0.6);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.git-commit-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(10, 20, 40, 0.85);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.git-commit-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  overflow: hidden;
+}
+
+.git-commit-msg {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--color-muted);
+}
+
+.git-commit-hash {
+  font-family: monospace;
+  color: var(--color-accent);
+  background: rgba(0, 229, 192, 0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 229, 192, 0.2);
+}
+
+.git-commit-revert-btn {
+  background: transparent;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.git-commit-revert-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
+}
+

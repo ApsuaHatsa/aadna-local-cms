@@ -31,7 +31,7 @@ import { normalizeAadnaContent } from './lib/normalize.js';
 import { saveUploadedImage, relocateAadnaResultMedia, getMediaPaths, getMediaLibrary, deleteMediaFile, invalidateMediaCache, openMediaFile } from './lib/media.js';
 import { syncSnpPath } from './lib/snp.js';
 import { generatePreview } from './lib/preview.js';
-import { getStatus, publish, runGitCommand } from './lib/git.js';
+import { getStatus, publish, runGitCommand, discardFilesChanges, getGitLog, revertGitCommit } from './lib/git.js';
 import { slugifyAadnaTitle } from './lib/slugify.js';
 import { captureYtreeScreenshotLocal } from './lib/ytree-screenshot.js';
 
@@ -869,6 +869,39 @@ app.post('/api/publish', (req, res) => {
   const result = publish(message, files);
   res.json(result);
 });
+
+// 7.1 POST /api/git-discard - Отмена незакоммиченных изменений файлов
+app.post('/api/git-discard', (req, res) => {
+  const { files, file } = req.body;
+  const targetFiles = Array.isArray(files) ? files : (file ? [file] : []);
+  if (targetFiles.length === 0) {
+    return res.status(400).json({ error: 'Не указаны файлы для отмены изменений' });
+  }
+
+  console.log(`[Git Discard] Отмена изменений в файлах:`, targetFiles);
+  const result = discardFilesChanges(targetFiles);
+  res.json(result);
+});
+
+// 7.2 GET /api/git-commits - История последних коммитов
+app.get('/api/git-commits', (req, res) => {
+  const count = req.query.count || 15;
+  const result = getGitLog(count);
+  res.json(result);
+});
+
+// 7.3 POST /api/git-revert-commit - Откат конкретного коммита через git revert
+app.post('/api/git-revert-commit', (req, res) => {
+  const { hash } = req.body;
+  if (!hash) {
+    return res.status(400).json({ error: 'Не указан хэш коммита для отката' });
+  }
+
+  console.log(`[Git Revert] Откат коммита: ${hash}`);
+  const result = revertGitCommit(hash);
+  res.json(result);
+});
+
 
 // Запуск сервера
 function startServer(port) {

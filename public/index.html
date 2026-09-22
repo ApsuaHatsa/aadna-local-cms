@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🧬 AADNA Local Admin</title>
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
   
   <!-- Toast UI Editor -->
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
@@ -485,41 +485,82 @@
     </div>
   </div>
 
-  <!-- Модальное окно публикации Git -->
+  <!-- Модальное окно публикации и управления Git -->
   <div class="modal-overlay" id="publishModal">
-    <div class="modal-content">
-      <h3 class="modal-title">Публикация изменений на сайт</h3>
-      
-      <div id="gitStatusSummary" style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--color-muted);">
-        Обнаружено изменений: 0 файлов.
+    <div class="modal-content" style="max-width: 680px; width: 92%;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 class="modal-title" style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+          <span>📦</span> Управление Git
+        </h3>
+        <button type="button" class="media-modal-close-btn" id="closePublishModalIconBtn" title="Закрыть">✕</button>
       </div>
       
-      <!-- Список измененных файлов -->
-      <div id="gitFilesList" style="max-height: 120px; overflow-y: auto; margin-bottom: 1rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; border: 1px solid var(--border-color); display: none;">
+      <!-- Вкладки Git модалки -->
+      <div class="git-tabs-nav">
+        <button type="button" class="git-tab-btn active" id="gitTabChangesBtn">
+          📝 Незакоммиченные изменения (<span id="gitChangesTabCount">0</span>)
+        </button>
+        <button type="button" class="git-tab-btn" id="gitTabHistoryBtn">
+          📜 История коммитов
+        </button>
       </div>
-      
-      <!-- Содержимое Diff -->
-      <div id="gitDiffContainer" style="display: none; margin-bottom: 1.5rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <label style="margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--color-muted);">Изменения в коде (Diff):</label>
-          <button type="button" class="btn btn-sm" id="toggleDiffBtn" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; background: rgba(255,255,255,0.05);">Свернуть</button>
+
+      <!-- Вкладка 1: Незакоммиченные изменения -->
+      <div id="gitChangesSection">
+        <div id="gitStatusSummary" style="margin-bottom: 0.75rem; font-size: 0.88rem; color: var(--color-muted);">
+          Обнаружено изменений: 0 файлов.
         </div>
-        <pre id="gitDiffContent" style="max-height: 250px; overflow: auto; background: #020617; border: 1px solid var(--color-border); border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.75rem; line-height: 1.4; white-space: pre; text-align: left;"></pre>
+        
+        <!-- Список измененных файлов -->
+        <div id="gitFilesList" class="git-files-list" style="display: none;">
+        </div>
+
+        <div id="gitFilesBatchActions" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <button type="button" class="btn btn-sm" id="gitSelectAllFilesBtn" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;">Выбрать все</button>
+            <button type="button" class="btn btn-sm" id="gitDeselectAllFilesBtn" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;">Снять выбор</button>
+          </div>
+          <button type="button" class="btn btn-sm" id="discardSelectedBtn" style="padding: 0.25rem 0.65rem; font-size: 0.75rem; color: var(--color-danger); border-color: rgba(239, 68, 68, 0.4);" title="Вернуть выбранные файлы к состоянию последнего коммита">
+            ↩️ Откатить выбранные
+          </button>
+        </div>
+        
+        <!-- Содержимое Diff -->
+        <div id="gitDiffContainer" style="display: none; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <label style="margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--color-muted);">Изменения в коде (Diff):</label>
+            <button type="button" class="btn btn-sm" id="toggleDiffBtn" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; background: rgba(255,255,255,0.05);">Свернуть</button>
+          </div>
+          <pre id="gitDiffContent" style="max-height: 200px; overflow: auto; background: #020617; border: 1px solid var(--color-border); border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.75rem; line-height: 1.4; white-space: pre; text-align: left;"></pre>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label for="commitMessageInput">Описание изменений (коммит)<span class="required">*</span></label>
+          <input type="text" id="commitMessageInput" class="modal-input" placeholder="например: add ardzinba dna result">
+          <span class="field-desc">Краткое описание на английском (строго до 30 символов).</span>
+        </div>
+
+        <div class="modal-console" id="modalConsole" style="display: none;">
+          Ожидание запуска коммита...
+        </div>
+
+        <div class="button-row" style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button class="btn" id="closePublishModalBtn">Закрыть</button>
+          <button class="btn btn-primary" id="startCommitBtn">🚀 Подтвердить и отправить</button>
+        </div>
       </div>
 
-      <div class="form-group" style="margin-bottom: 1.5rem;">
-        <label for="commitMessageInput">Описание изменений (коммит)<span class="required">*</span></label>
-        <input type="text" id="commitMessageInput" class="modal-input" placeholder="например: add ardzinba dna result">
-        <span class="field-desc">Краткое описание на английском (строго до 30 символов).</span>
-      </div>
-
-      <div class="modal-console" id="modalConsole" style="display: none;">
-        Ожидание запуска коммита...
-      </div>
-
-      <div class="button-row">
-        <button class="btn" id="closePublishModalBtn">Отмена</button>
-        <button class="btn btn-primary" id="startCommitBtn">🚀 Подтвердить и отправить</button>
+      <!-- Вкладка 2: История коммитов -->
+      <div id="gitHistorySection" style="display: none;">
+        <div style="font-size: 0.85rem; color: var(--color-muted); margin-bottom: 1rem;">
+          Последние коммиты репозитория сайта. Вы можете откатить ошибочный коммит при помощи <code>git revert</code>:
+        </div>
+        <div id="gitCommitsList" class="git-commits-list">
+          <div style="text-align: center; color: var(--color-muted); padding: 1.5rem;">Загрузка истории коммитов...</div>
+        </div>
+        <div class="button-row" style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+          <button class="btn" id="closePublishModalBtn2">Закрыть</button>
+        </div>
       </div>
     </div>
   </div>
@@ -623,6 +664,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Подключение JS -->
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>

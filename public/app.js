@@ -1211,70 +1211,217 @@ function generateCommitMessage(status) {
   return 'update: website';
 }
 
-async function openPublishModal() {
-  const modal = document.getElementById('publishModal');
+// Переключение вкладок в модальном окне Git
+function switchGitTab(tabName) {
+  const tabChangesBtn = document.getElementById('gitTabChangesBtn');
+  const tabHistoryBtn = document.getElementById('gitTabHistoryBtn');
+  const changesSection = document.getElementById('gitChangesSection');
+  const historySection = document.getElementById('gitHistorySection');
+
+  if (tabName === 'history') {
+    tabChangesBtn?.classList.remove('active');
+    tabHistoryBtn?.classList.add('active');
+    if (changesSection) changesSection.style.display = 'none';
+    if (historySection) historySection.style.display = 'block';
+    loadGitCommits();
+  } else {
+    tabHistoryBtn?.classList.remove('active');
+    tabChangesBtn?.classList.add('active');
+    if (historySection) historySection.style.display = 'none';
+    if (changesSection) changesSection.style.display = 'block';
+  }
+}
+
+// Загрузка и рендеринг истории коммитов
+async function loadGitCommits() {
+  const listEl = document.getElementById('gitCommitsList');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align: center; color: var(--color-muted); padding: 1.5rem;">Загрузка истории коммитов...</div>';
+
+  try {
+    const res = await fetch('/api/git-commits?count=15');
+    const data = await res.json();
+
+    if (!data.success || !data.commits || data.commits.length === 0) {
+      listEl.innerHTML = '<div style="text-align: center; color: var(--color-muted); padding: 1.5rem;">История коммитов пуста или недоступна.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    data.commits.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'git-commit-card';
+      card.innerHTML = `
+        <div class="git-commit-info">
+          <div class="git-commit-msg" title="${c.message}">${c.message}</div>
+          <div class="git-commit-meta">
+            <span class="git-commit-hash">${c.hash}</span>
+            <span>📅 ${c.date}</span>
+            <span>👤 ${c.author}</span>
+          </div>
+        </div>
+        <button type="button" class="git-commit-revert-btn" title="Создать отменяющий коммит (git revert)">
+          ↩️ Откатить
+        </button>
+      `;
+
+      card.querySelector('.git-commit-revert-btn').addEventListener('click', () => {
+        revertCommitAction(c.hash, c.message);
+      });
+
+      listEl.appendChild(card);
+    });
+  } catch (err) {
+    listEl.innerHTML = `<div style="text-align: center; color: var(--color-danger); padding: 1.5rem;">Ошибка: ${err.message}</div>`;
+  }
+}
+
+// Действие отката коммита
+async function revertCommitAction(hash, message) {
+  if (!confirm(`Вы действительно хотите откатить коммит?\n"${message}" (${hash})\n\nБудет создан отменяющий коммит и отправлен на GitHub.`)) {
+    return;
+  }
+
+  showToast(`Откат коммита ${hash}...`, 'info');
+  try {
+    const res = await fetch('/api/git-revert-commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Ошибка отката коммита');
+    }
+
+    showToast(data.message || `Коммит ${hash} успешно откачен!`, 'success');
+    await updateGitStatus();
+    await loadGitCommits();
+    await refreshGitChangesList();
+    if (window.location.hash === '#/media' && typeof loadAndRenderMedia === 'function') {
+      loadAndRenderMedia(true);
+    }
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, 'error');
+  }
+}
+
+// Отмена изменений одного или нескольких файлов
+async function discardGitFiles(files) {
+  if (!files || files.length === 0) return;
+  try {
+    const res = await fetch('/api/git-discard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка отмены изменений');
+    }
+    showToast(files.length === 1 ? 'Изменения в файле отменены' : `Изменения отменены (${files.length} файлов)`, 'success');
+    await updateGitStatus();
+    await refreshGitChangesList();
+    if (window.location.hash === '#/media' && typeof loadAndRenderMedia === 'function') {
+      loadAndRenderMedia(true);
+    }
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, 'error');
+  }
+}
+
+// Обновление списка измененных файлов внутри открытой модалки
+async function refreshGitChangesList() {
   const summary = document.getElementById('gitStatusSummary');
-  const commitInput = document.getElementById('commitMessageInput');
-  const consoleLog = document.getElementById('modalConsole');
+  const tabCount = document.getElementById('gitChangesTabCount');
   const filesList = document.getElementById('gitFilesList');
+  const batchActions = document.getElementById('gitFilesBatchActions');
   const diffContainer = document.getElementById('gitDiffContainer');
   const diffContent = document.getElementById('gitDiffContent');
-  
-  commitInput.value = '';
-  consoleLog.style.display = 'none';
-  consoleLog.innerText = '';
-  filesList.innerHTML = '';
-  filesList.style.display = 'none';
-  diffContainer.style.display = 'none';
-  diffContent.innerHTML = '';
-  
+  const commitInput = document.getElementById('commitMessageInput');
+
   try {
     const res = await fetch('/api/git-status');
     const status = await res.json();
-    
+
+    if (tabCount) tabCount.innerText = status.totalChanges || 0;
+
     if (status.success) {
-      summary.innerText = `Изменено файлов: ${status.totalChanges} (${status.modified} изм., ${status.added + status.untracked} доб., ${status.deleted} уд.)`;
-      commitInput.placeholder = `например: add new post`;
-      commitInput.value = generateCommitMessage(status);
-      
+      if (status.totalChanges === 0) {
+        if (summary) summary.innerText = 'Нет незакоммиченных изменений. Рабочий каталог чист.';
+        if (filesList) {
+          filesList.innerHTML = '';
+          filesList.style.display = 'none';
+        }
+        if (batchActions) batchActions.style.display = 'none';
+        if (diffContainer) diffContainer.style.display = 'none';
+        if (diffContent) diffContent.innerHTML = '';
+        if (commitInput) commitInput.value = '';
+        return;
+      }
+
+      if (summary) {
+        summary.innerText = `Изменено файлов: ${status.totalChanges} (${status.modified} изм., ${status.added + status.untracked} доб., ${status.deleted} уд.)`;
+      }
+
+      if (commitInput && !commitInput.value.trim()) {
+        commitInput.placeholder = `например: add new post`;
+        commitInput.value = generateCommitMessage(status);
+      }
+
       if (status.files && status.files.length > 0) {
-        filesList.style.display = 'block';
-        status.files.forEach(f => {
-          let color = 'var(--color-muted)';
-          let statusChar = f.status;
-          
-          if (f.status === 'M') {
-            color = '#6366F1';
-            statusChar = 'Изм.';
-          } else if (f.status === 'A' || f.status === '??') {
-            color = 'var(--color-accent)';
-            statusChar = 'Нов.';
-          } else if (f.status === 'D') {
-            color = 'var(--color-danger)';
-            statusChar = 'Удл.';
-          }
-          
-          const item = document.createElement('div');
-          item.style.color = color;
-          item.style.marginBottom = '0.4rem';
-          item.style.display = 'flex';
-          item.style.alignItems = 'center';
-          
-          item.innerHTML = `
-            <label style="display: flex; align-items: center; gap: 0.5rem; width: 100%; cursor: pointer;">
-              <input type="checkbox" class="git-file-checkbox" value="${f.file}" checked style="accent-color: var(--color-accent); flex-shrink: 0;">
-              <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.file}</span>
-              <span style="font-weight: bold; font-size: 0.75rem; flex-shrink: 0;">[${statusChar}]</span>
-            </label>
-          `;
-          filesList.appendChild(item);
-        });
+        if (filesList) {
+          filesList.style.display = 'flex';
+          filesList.innerHTML = '';
+
+          status.files.forEach(f => {
+            let color = 'var(--color-muted)';
+            let statusChar = f.status;
+
+            if (f.status === 'M') {
+              color = '#6366F1';
+              statusChar = 'Изм.';
+            } else if (f.status === 'A' || f.status === '??') {
+              color = 'var(--color-accent)';
+              statusChar = 'Нов.';
+            } else if (f.status === 'D') {
+              color = 'var(--color-danger)';
+              statusChar = 'Удл.';
+            }
+
+            const row = document.createElement('div');
+            row.className = 'git-file-row';
+            row.innerHTML = `
+              <label class="git-file-label">
+                <input type="checkbox" class="git-file-checkbox" value="${f.file}" checked style="accent-color: var(--color-accent); flex-shrink: 0;">
+                <span class="git-file-name" title="${f.file}">${f.file}</span>
+                <span class="git-file-badge" style="color: ${color};">[${statusChar}]</span>
+              </label>
+              <button type="button" class="git-file-discard-btn" title="Отменить изменения этого файла">↩️ Отменить</button>
+            `;
+
+            row.querySelector('.git-file-discard-btn').addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (confirm(`Отменить изменения в файле "${f.file}"?\nВсе несохраненные правки будут потеряны.`)) {
+                discardGitFiles([f.file]);
+              }
+            });
+
+            filesList.appendChild(row);
+          });
+        }
+
+        if (batchActions) batchActions.style.display = 'flex';
 
         try {
           const diffRes = await fetch('/api/git-diff');
           const diffData = await diffRes.json();
           if (diffData.success && diffData.diff) {
             renderDiffText(diffData.diff);
+          } else if (diffContainer) {
+            diffContainer.style.display = 'none';
           }
         } catch (err) {
           console.error('Ошибка загрузки diff:', err);
@@ -1282,29 +1429,45 @@ async function openPublishModal() {
       }
     }
   } catch (e) {
-    summary.innerText = 'Не удалось загрузить статус Git';
+    if (summary) summary.innerText = 'Не удалось загрузить статус Git';
   }
-  
+}
+
+async function openPublishModal() {
+  const modal = document.getElementById('publishModal');
+  const commitInput = document.getElementById('commitMessageInput');
+  const consoleLog = document.getElementById('modalConsole');
+
+  if (commitInput) commitInput.value = '';
+  if (consoleLog) {
+    consoleLog.style.display = 'none';
+    consoleLog.innerText = '';
+  }
+
+  // По умолчанию открываем вкладку изменений
+  switchGitTab('changes');
+  await refreshGitChangesList();
+
   modal.classList.add('active');
 }
 
 function renderDiffText(diffText) {
   const diffContent = document.getElementById('gitDiffContent');
   const diffContainer = document.getElementById('gitDiffContainer');
-  
+
   if (!diffText || diffText.trim() === '') {
     diffContent.innerHTML = '<span style="color: var(--color-muted);">Нет изменений в файлах.</span>';
     diffContainer.style.display = 'block';
     return;
   }
-  
+
   const lines = diffText.split('\n');
   const htmlLines = lines.map(line => {
     const safeLine = line
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-      
+
     if (safeLine.startsWith('+') && !safeLine.startsWith('+++')) {
       return `<span style="color: #10B981;">${safeLine}</span>`;
     } else if (safeLine.startsWith('-') && !safeLine.startsWith('---')) {
@@ -1316,7 +1479,7 @@ function renderDiffText(diffText) {
     }
     return safeLine;
   });
-  
+
   diffContent.innerHTML = htmlLines.join('\n');
   diffContainer.style.display = 'block';
 }
@@ -1329,7 +1492,7 @@ async function startGitPublish() {
   const commitInput = document.getElementById('commitMessageInput');
   const consoleLog = document.getElementById('modalConsole');
   const message = commitInput.value.trim() || commitInput.placeholder;
-  
+
   if (message.length > 30) {
     showToast('Длина описания не должна превышать 30 символов!', 'error');
     return;
@@ -1337,32 +1500,32 @@ async function startGitPublish() {
 
   const selectedFiles = Array.from(document.querySelectorAll('.git-file-checkbox:checked')).map(cb => cb.value);
   const totalFiles = document.querySelectorAll('.git-file-checkbox').length;
-  
+
   if (selectedFiles.length === 0 && totalFiles > 0) {
     showToast('Выберите хотя бы один файл для коммита!', 'error');
     return;
   }
-  
+
   consoleLog.style.display = 'block';
   if (selectedFiles.length > 0 && selectedFiles.length < totalFiles) {
     consoleLog.innerText = '> git reset\n> git add (выбранные файлы)\n> git commit -m "' + message + '"\n';
   } else {
     consoleLog.innerText = '> git add .\n> git commit -m "' + message + '"\n';
   }
-  
+
   try {
     const response = await fetch('/api/publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, files: selectedFiles })
     });
-    
+
     const result = await response.json();
-    
+
     if (result.success) {
       consoleLog.innerText += result.stdout + '\n\n> Успешно опубликовано!';
       showToast('Сайт успешно опубликован на GitHub!', 'success');
-      
+
       setTimeout(() => {
         closePublishModal();
         window.location.hash = `#/collection/${ACTIVE_COLLECTION}`;
@@ -1553,11 +1716,35 @@ async function initApp() {
     }
   });
   
-  document.getElementById('gitStatusBar').addEventListener('click', openPublishModal);
-  document.getElementById('closePublishModalBtn').addEventListener('click', closePublishModal);
-  document.getElementById('startCommitBtn').addEventListener('click', startGitPublish);
+  document.getElementById('gitStatusBar')?.addEventListener('click', openPublishModal);
+  document.getElementById('openPublishModalBtn')?.addEventListener('click', openPublishModal);
+  document.getElementById('closePublishModalBtn')?.addEventListener('click', closePublishModal);
+  document.getElementById('closePublishModalBtn2')?.addEventListener('click', closePublishModal);
+  document.getElementById('closePublishModalIconBtn')?.addEventListener('click', closePublishModal);
+  document.getElementById('startCommitBtn')?.addEventListener('click', startGitPublish);
+
+  document.getElementById('gitTabChangesBtn')?.addEventListener('click', () => switchGitTab('changes'));
+  document.getElementById('gitTabHistoryBtn')?.addEventListener('click', () => switchGitTab('history'));
+
+  document.getElementById('gitSelectAllFilesBtn')?.addEventListener('click', () => {
+    document.querySelectorAll('.git-file-checkbox').forEach(cb => cb.checked = true);
+  });
+  document.getElementById('gitDeselectAllFilesBtn')?.addEventListener('click', () => {
+    document.querySelectorAll('.git-file-checkbox').forEach(cb => cb.checked = false);
+  });
+
+  document.getElementById('discardSelectedBtn')?.addEventListener('click', () => {
+    const selected = Array.from(document.querySelectorAll('.git-file-checkbox:checked')).map(cb => cb.value);
+    if (selected.length === 0) {
+      showToast('Выберите файлы для отмены изменений!', 'info');
+      return;
+    }
+    if (confirm(`Отменить изменения для ${selected.length} выбранных файлов?\nВсе несохраненные правки будут потеряны.`)) {
+      discardGitFiles(selected);
+    }
+  });
   
-  document.getElementById('toggleDiffBtn').addEventListener('click', () => {
+  document.getElementById('toggleDiffBtn')?.addEventListener('click', () => {
     const diffContent = document.getElementById('gitDiffContent');
     const toggleBtn = document.getElementById('toggleDiffBtn');
     if (diffContent.style.display === 'none') {
@@ -2878,6 +3065,10 @@ function setupMediaListeners() {
       const detailModal = document.getElementById('mediaDetailModal');
       if (detailModal && detailModal.style.display === 'flex') {
         closeMediaModal();
+      }
+      const pubModal = document.getElementById('publishModal');
+      if (pubModal && pubModal.classList.contains('active')) {
+        closePublishModal();
       }
     }
   });
